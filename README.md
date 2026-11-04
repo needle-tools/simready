@@ -6,6 +6,10 @@ Load articulated glTF assets, manipulate joints, and simulate independently load
 npm install @needle-tools/simready three
 ```
 
+Create one controller for an asset and keep it while the asset is in use. Choose
+joint posing for direct manipulation, or dynamics for gravity and contacts. The
+examples show these as alternatives; loading an asset does not start either one.
+
 ## Three.js
 
 Register the extension on your `GLTFLoader` before loading a SimReady GLB. In an
@@ -18,7 +22,11 @@ import {registerSimreadyLoader, getSimreadyRuntime} from '@needle-tools/simready
 const asset = await registerSimreadyLoader(new GLTFLoader()).loadAsync('/assembly.glb');
 scene.add(asset.scene);
 const runtime = getSimreadyRuntime(asset);
-if (!runtime) throw new Error('This asset has no SimReady data.');
+```
+
+For joint posing, create a mechanism once:
+
+```js
 const mechanism = await runtime.createMechanism();
 mechanism.setJointValue('/Assembly/Hinge', 45);
 ```
@@ -35,15 +43,14 @@ For dynamics without an existing physics host, install Rapier:
 npm install @dimforge/rapier3d-compat
 ```
 
-Initialize it once, then attach assets to one world. Continue from the previous
-example after disposing the mechanism:
+Initialize it once, then attach the loaded asset to a world. This is the dynamics
+alternative to creating a mechanism:
 
 ```js
 import R from '@dimforge/rapier3d-compat';
 import {createSimulationWorld} from '@needle-tools/simready/rapier';
 
 await R.init();
-mechanism.dispose();
 const world = createSimulationWorld({rapier: R});
 const assembly = await runtime.createSimulation({world, id: 'assembly'});
 
@@ -53,9 +60,8 @@ assembly.setJointTarget('/Assembly/Slide', {position: .3});
 ```
 
 Meshes update when the world steps. Attach additional assets with their own IDs
-to get contacts between them. `assembly.dispose()` removes that asset;
-`world.dispose()` removes all of this world's assets. The application still owns
-the Three.js scene, geometries, materials and textures.
+to get contacts between them. The application still owns the Three.js scene,
+geometries, materials and textures.
 
 ## Needle Engine
 
@@ -74,22 +80,24 @@ const simreadyPlugin = {
 addCustomExtensionPlugin(simreadyPlugin);
 
 const asset = await loadAsset('/assembly.glb', {context});
-if (!asset) throw new Error('The glTF asset did not load.');
 context.scene.add(asset.scene);
 const runtime = getSimreadyRuntime(asset);
-if (!runtime) throw new Error('This asset has no SimReady data.');
+```
+
+For joint posing without Rapier:
+
+```js
 const mechanism = await runtime.createMechanism();
 mechanism.setJointValue('/Assembly/Hinge', 45);
 ```
 
 This preserves Needle's other glTF import plugins and keeps SimReady registration
 separate from the USD plugin. Loading an asset or creating a mechanism does not
-initialize Rapier. Dispose the mechanism before switching to dynamics.
-When removing the application's loader registration, call
-`removeCustomImportExtensionType(simreadyPlugin)` from `@needle-tools/engine`.
+initialize Rapier.
 
-For dynamics, reuse the Engine's Rapier module and world. This requires an Engine
-version with `RapierPhysics.registerWorldExtension`. The same setup works when
+For dynamics instead of joint posing, reuse the Engine's Rapier module and
+world. This requires an Engine version with `RapierPhysics.registerWorldExtension`.
+The same setup works when
 physics is already running and when the Engine has not initialized it yet:
 
 ```js
@@ -97,26 +105,20 @@ import {NEEDLE_ENGINE_MODULES} from '@needle-tools/engine';
 import {createSimulationWorld} from '@needle-tools/simready/rapier';
 
 const physics = context.physics.getOrCreatePhysicsEngine();
-if (!physics?.registerWorldExtension) {
-  throw new Error('This host needs a Rapier backend with world extension support.');
-}
-const registerWorldExtension = physics.registerWorldExtension.bind(physics);
-if (!await physics.initialize() || !physics.world) throw new Error('Host physics is disabled.');
-mechanism.dispose();
+await physics.initialize();
 const world = createSimulationWorld({
   rapier: NEEDLE_ENGINE_MODULES.RAPIER_PHYSICS.MODULE,
   world: physics.world,
-  registerWorldExtension,
+  registerWorldExtension: extension => physics.registerWorldExtension(extension),
 });
 const assembly = await runtime.createSimulation({world, id: 'assembly', position: [0, 0, 0], rotation: [0, 0, 0, 1]});
 ```
 
 Needle steps the world and synchronizes the asset through its normal physics
 loop. Do not call `world.step()` or `assembly.update()` to advance this borrowed
-world. Keep the adapter on your owning component and call `world.dispose()` from
-its `onDestroy()`; this removes the imported bodies without freeing Needle's
-world or removing other components' bodies. Engine world teardown also disposes
-registered adapters before freeing the solver.
+world. Keep the adapter on the owning component for as long as those assets are
+in use. Engine world teardown also disposes registered adapters before freeing
+the solver.
 
 Explicitly disabling the Engine Rapier backend also disables this dynamics path; the adapter does not load a second runtime to override that choice.
 
@@ -134,30 +136,29 @@ import {createUsdMechanism} from '@needle-tools/usd/kinematics';
 
 const removeUsdPlugin = await addPluginForNeedleEngine({getFiles: () => []});
 const asset = await loadAsset('/cabinet.usd', {context});
-if (!asset) throw new Error('The USD asset did not load.');
 context.scene.add(asset.scene);
 const handle = getHydraHandleFromNeedleEngineAsset(asset);
-if (!handle) throw new Error('The loaded asset has no USD handle.');
+```
 
+For joint posing:
+
+```js
 const mechanism = await createUsdMechanism({handle});
 mechanism.setJointValue('/Cabinet/Hinge', 45);
 ```
 
-Dispose the mechanism before switching to dynamics. With the Engine world
-adapter from the previous example, attach the USD handle instead of a glTF
-runtime:
+For dynamics instead, attach the USD handle to the Engine world adapter from the
+previous example:
 
 ```js
 import {createUsdPhysics} from '@needle-tools/usd/physics';
 
-mechanism.dispose();
 const cabinet = await createUsdPhysics({handle, world, id: 'cabinet', allowPartial: false});
 ```
 
 The USD adapters read the composed stage, bind bodies to rendered instances and
 pause timeline playback while they control the poses. They use this package's
-controllers. Dispose them before unloading or recomposing the stage, and call
-`removeUsdPlugin()` when removing the application's USD loader registration.
+controllers.
 
 ## From code, without a renderer
 
@@ -201,7 +202,36 @@ the results from `mechanism.bodies`. For Three.js visuals, pass a `bindVisuals`
 callback using the `/three` entry's explicit `{object, body, instanceIndex?}`
 bindings. It preserves each visual's initial offset from its owning body.
 
-## Coordinates and lifetime
+## Controller lifetime
+
+A mechanism stays alive across joint changes and drag gestures. Use
+`setJointValue()` repeatedly, or `beginDrag()`, `moveDrag()` and `endDrag()` for
+pointer interaction. `endDrag()` finishes a gesture without destroying the
+mechanism. `play()` enables dragging; `pause()` stops dragging while keeping the
+controller available.
+
+Dispose a controller when unloading or replacing its asset, or when changing
+that asset from joint posing to dynamics. Both controllers move the same parts,
+so they cannot control the same visual root at once. For an explicit mode switch:
+
+```js
+mechanism.dispose();
+const assembly = await runtime.createSimulation({world, id: 'assembly'});
+```
+
+Disposal restores the original poses and releases the controller's bindings. It
+does not delete the asset's meshes, materials or textures. `assembly.dispose()`
+removes that simulation asset; `world.dispose()` removes all assets attached
+through the adapter. A borrowed Needle world and its other bodies remain alive.
+In a Needle `Behaviour`, put this cleanup in `onDestroy()`, once at the end of
+the component's lifetime.
+
+For USD, dispose the controller before unloading or recomposing the stage.
+Loader registrations last for the application: use
+`removeCustomImportExtensionType(simreadyPlugin)` when unregistering the glTF
+plugin, or `removeUsdPlugin()` when unregistering the USD plugin.
+
+## Coordinates and stepping
 
 When another host already has a Rapier world, borrow that exact world and its
 module. The adapter adds and removes only its own bodies; it preserves gravity,
