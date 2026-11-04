@@ -56,7 +56,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     const inScene = item => item.simulationOwners?.length ? !!scene && item.simulationOwners.includes(scene.path)
         : !scene || scene.path === scenes[0]?.path;
     let playing = false, disposed = false, accumulator = 0, drag = null;
-    const ownedBodies = new Set(), ownedColliders = new Set(), ownedJoints = new Set();
+    const ownedBodies = new Set(), ownedColliders = new Set(), ownedJoints = new Set(), ownedMultibodyJoints = new Set();
     const bindingAbort = new AbortController();
     let visuals, unregister, unregisterResources, released = false, visualsDisposed = false;
     const release = () => {
@@ -74,6 +74,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         unregisterResources?.();
         if (ownsWorld) { try{events.free();}finally{world.free();} }
         else {
+            for (const joint of ownedMultibodyJoints) if (world.multibodyJoints.contains(joint.handle)) world.removeMultibodyJoint(joint, true);
             for (const joint of ownedJoints) if (world.impulseJoints.contains(joint.handle)) world.removeImpulseJoint(joint, true);
             for (const body of ownedBodies) if (world.bodies.contains(body.handle)) world.removeRigidBody(body);
             for (const collider of ownedColliders) if (world.colliders.contains(collider.handle)) world.removeCollider(collider, true);
@@ -181,7 +182,14 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             body.setAdditionalMassProperties(mass, com, inertia, frame, false);
             body.recomputeMassPropertiesFromColliders();
         }
+        const articulatedJoints = new Set((snapshot.articulations || []).flatMap(item => item.articulatedJoints));
+        for (const articulation of snapshot.articulations || []) for (const path of articulation.articulatedBodies)
+            bodies.get(path)?.body.setAdditionalSolverIterations(Math.max(0,24-world.numSolverIterations));
         const fixedWorld = makeBody(R.RigidBodyDesc.fixed());
+        // Fixed reduced-coordinate links eliminate ill-conditioned tiny bodies
+        // between heavy links, without giving up movable-joint drives and limits.
+        const fixedParents = new Map();
+        const fixedRoot = handle => {while(fixedParents.has(handle))handle=fixedParents.get(handle);return handle;};
         for (const data of snapshot.joints || []) {
             if (data.jointEnabled === false) continue;
             const b0 = data.body0 ? bodies.get(data.body0)?.body : fixedWorld;
@@ -208,7 +216,14 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             if (Number.isFinite(data.breakForce) || Number.isFinite(data.breakTorque)) {
                 warn(data, 'Joint breaking thresholds are not supported.');
             }
-            const joint = makeJoint(desc, b0, b1);
+            const root0=fixedRoot(b0.handle),root1=fixedRoot(b1.handle);
+            const reducedFixed = data.type === 'fixed' && articulatedJoints.has(data.path) && !data.excludeFromArticulation && root0 !== root1;
+            let joint;
+            if (reducedFixed) {
+                joint = world.createMultibodyJoint(desc,b0,b1,true);
+                ownedMultibodyJoints.add(joint);fixedParents.set(root1,root0);
+                backend.jointSolver='hybrid';
+            } else joint = makeJoint(desc, b0, b1);
             if ((data.type === 'revolute' || data.type === 'prismatic') && joint.setLocalFrame1) {
                 // Rapier unit joints use X in their local frame. Rotate that
                 // basis into USD's authored axis, then apply each local frame.
@@ -233,6 +248,10 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             controls.set(data.path,{data,drive:{...data.drive}});
         }
 
+        if (backend.jointSolver === 'hybrid') for (const item of backend.adaptations) if (item.source === 'reduced-coordinate articulation') {
+            item.target='reduced-coordinate fixed links with impulse motion joints';
+            item.reason='Fixed links use reduced coordinates; authored movable joint frames, limits, drives and collision filters use impulse constraints.';
+        }
         const groupMap = new Map((snapshot.groups || []).map(g => [g.path, g]));
         const groupAliases = new Map();
         for (const group of snapshot.groups || []) for (const path of [group.path, ...(group.mergedGroups || [])]) groupAliases.set(path, group.path);

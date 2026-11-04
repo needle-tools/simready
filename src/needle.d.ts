@@ -1,5 +1,6 @@
-import type {Context, Rigidbody, Collider} from '@needle-tools/engine';
-import type {World, RigidBody} from '@dimforge/rapier3d-compat';
+import type {Context, Rigidbody, Collider, RapierPhysics} from '@needle-tools/engine';
+type World=NonNullable<RapierPhysics['world']>;
+type RigidBody=ReturnType<World['createRigidBody']>;
 import type {SimulationWorld, SimulationAsset, WorldAssetOptions} from './rapier.js';
 export interface NeedleSimulationAsset extends SimulationAsset<World,RigidBody> {
  readonly rigidbodies:ReadonlyMap<string,Rigidbody>;

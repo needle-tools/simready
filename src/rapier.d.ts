@@ -8,7 +8,7 @@ export type SimulationBodyRecord<B=BodyPose>={data:PhysicsBody;body:B;colliders:
 export type SimulationBodies<B=BodyPose>=Map<string,SimulationBodyRecord<B>>;
 export type SimulationColliders<B=BodyPose>=Map<number,{data:PhysicsShape;collider:object;owner?:SimulationBodyRecord<B>}>;
 export interface Simulation<W=object,B=BodyPose> {
- readonly backend:{name:'rapier';jointSolver:'impulse';adaptations:Array<{path:string;source:string;target:string;reason:string}>};
+ readonly backend:{name:'rapier';jointSolver:'impulse'|'hybrid';adaptations:Array<{path:string;source:string;target:string;reason:string}>};
  readonly world:W;readonly bodies:SimulationBodies<B>;readonly colliders:SimulationColliders<B>;readonly joints:Map<string,object>;readonly unsupported:PhysicsIssue[];
  play():void;pause():void;isPlaying():boolean;update(dt:number):void;
  /** Advance exactly dt; independent of playback. Shared assets are stepped by their world. */

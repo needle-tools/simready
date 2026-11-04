@@ -9,10 +9,11 @@ const engineTarball=process.env.SIMREADY_ENGINE_TARBALL;
 const source=fileURLToPath(new URL('..',import.meta.url));
 const output=await mkdtemp(join(tmpdir(),'needle-simready-packed-'));
 function run(cwd,cmd,args){const r=spawnSync(cmd,args,{cwd,encoding:'utf8',maxBuffer:8*1024*1024});assert.equal(r.status,0,r.stdout+r.stderr);return r.stdout;}
+const enginePackage=engineTarball?JSON.parse(run(source,'tar',['-xOf',resolve(engineTarball),'package/package.json'])):null;
 const pack=JSON.parse(run(source,'npm',['pack','--json','--pack-destination',output]))[0],tarball=join(output,pack.filename);
 const result={version:pack.version,engineTarball,tarball,sha256:createHash('sha256').update(await readFile(tarball)).digest('hex'),source:run(source,'git',['rev-parse','HEAD']).trim(),consumer:join(output,'consumer')};
 const root=result.consumer;await mkdir(root);
-await writeFile(join(root,'package.json'),JSON.stringify({name:'simready-packed-consumer',private:true,type:'module',dependencies:{...(engineTarball?{'@needle-tools/engine':`file:${resolve(engineTarball)}`}:{ }),'@needle-tools/simready':`file:${tarball}`,three:'0.185.1','@dimforge/rapier3d-compat':'0.21.0',vite:'8.1.0',typescript:'5.9.3','@types/three':'0.185.4'},overrides:{three:'$three'}}));
+await writeFile(join(root,'package.json'),JSON.stringify({name:'simready-packed-consumer',private:true,type:'module',dependencies:{...(engineTarball?{'@needle-tools/engine':`file:${resolve(engineTarball)}`}:{ }),'@needle-tools/simready':`file:${tarball}`,three:enginePackage?.dependencies?.three||'0.185.1','@dimforge/rapier3d-compat':'0.21.0',vite:'8.1.0',typescript:'5.9.3','@types/three':'0.185.4'},overrides:{three:'$three'}}));
 run(root,'npm',['install','--no-audit','--no-fund','--prefer-offline']);
 assert.equal(await realpath(join(root,'node_modules/@needle-tools/simready')),join(await realpath(root),'node_modules/@needle-tools/simready'));
 result.dependencies=run(root,'npm',['ls','three','@needle-tools/simready',...(engineTarball?['@needle-tools/engine']:[])]);
@@ -71,13 +72,26 @@ const borrowed=createSimulationWorld({rapier:R,world:external,registerWorldExten
 borrowed.sync();borrowed.dispose();external.free();
 const loader=registerSimreadyLoader(new GLTFLoader());void loader;host.dispose();
 `);
+run(root,'npx',['--no-install','tsc','--noEmit','--strict','--skipLibCheck','false','--module','NodeNext','--moduleResolution','NodeNext','--target','ES2022','--lib','ES2022,DOM,ESNext.Disposable','consumer.ts']);
 if(engineTarball)await appendFile(join(root,'consumer.ts'),`
 import {createNeedleSimulationWorld} from '@needle-tools/simready/needle';
 declare const context:import('@needle-tools/engine').Context;
 const needle=await createNeedleSimulationWorld({context});
 needle.world.timestep=1/60;needle.dispose();
 `);
-run(root,'npx',['--no-install','tsc','--noEmit','--strict','--skipLibCheck','false','--module','NodeNext','--moduleResolution','NodeNext','--target','ES2022','--lib','ES2022,DOM,ESNext.Disposable','consumer.ts']);
+if(engineTarball){
+ const args=['--no-install','tsc','--noEmit','--strict','--module','ESNext','--moduleResolution','Bundler','--target','ES2022','--lib','ES2022,DOM,ESNext.Disposable','consumer.ts'];
+ const check=spawnSync('npx',[...args,'--skipLibCheck','false'],{cwd:root,encoding:'utf8'});
+ if(check.status!==0){
+  const diagnostics=check.stdout+check.stderr;
+  assert.ok(!/^(?:consumer\.ts|node_modules\/@needle-tools\/simready\/).*error TS/m.test(diagnostics),diagnostics);
+  result.engineDeclarationDiagnostics=join(output,'engine-declarations.log');
+  await writeFile(result.engineDeclarationDiagnostics,diagnostics);
+  // Engine's unrelated ambient/dependency declarations are audited above;
+  // the consumer still checks its imported public API under strict mode.
+  run(root,'npx',[...args,'--skipLibCheck','true']);
+ }
+}
 if(engineTarball)await writeFile(join(root,'needle-probe.js'),await readFile(new URL('./packed-needle-probe.js',import.meta.url),'utf8'));
 await writeFile(join(root,'index.html'),'<script type="module">import {probe} from "./probe.js";window.packed=await probe();'+(engineTarball?'const {probeNeedle}=await import("./needle-probe.js");window.packed.needle=await probeNeedle();window.needleComplete=true;':'')+'</script>');
 run(root,'npx',['--no-install','vite','build']);

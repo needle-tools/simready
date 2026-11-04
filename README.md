@@ -263,8 +263,12 @@ The Rapier adapter uses authored triangle surfaces for triangle meshes and cooks
 SDF-labelled source meshes into concave compounds through convex decomposition.
 Cavities remain open for interaction. These are Rapier compound contacts rather
 than PhysX SDF grid evaluation. `simulation.backend.adaptations` records that
-conversion and any articulation solved through impulse constraints. Articulation
-membership, authored joint frames, limits, drives and collision filters remain
-intact; `backend.jointSolver` identifies the solver representation. Authored
+conversion and the articulation solver representation. Fixed articulation links
+use reduced coordinates, preventing tiny intermediate bodies from destabilizing
+heavy links. Movable joints retain authored frames, limits, drives and collision
+filters through impulse constraints; articulation islands request additional
+solver iterations without changing the host world's settings. This reproduces
+the supported descriptor behavior with Rapier rather than matching PhysX's
+actuator dynamics. `backend.jointSolver` identifies the solver representation. Authored
 collider-local mass, center of mass and inertia contribute to their owning body;
 body-level mass properties retain precedence.

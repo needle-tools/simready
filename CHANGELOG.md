@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Preserve articulation collision filtering and stabilize fixed links between bodies with very different masses while retaining joint limits and drives.
+
 - Simulate concave collision meshes, including SDF-labelled source meshes, while preserving cavities and authored collider mass properties.
 
 - Register imported bodies and colliders with Needle Engine through `@needle-tools/simready/needle`, including physics queries, collision events and Engine-owned lifecycle.
