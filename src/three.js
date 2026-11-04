@@ -45,7 +45,7 @@ export function bindVisuals({root, bodies, bindings, worldSpace = false}) {
         bodyForObject(object, instanceIndex) {
             for (let current = object; current; current = current.parent) {
                 const owner = byObject.get(current)?.get(current.isInstancedMesh ? instanceIndex ?? 0 : 0);
-                if (owner?.body.isDynamic()) return owner;
+                if (owner) return owner;
             }
             return null;
         },

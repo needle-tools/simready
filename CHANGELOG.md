@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Preserve object and instance body identity across fixed, kinematic and paused states.
+
 - Pause individual assets in shared physics worlds while preserving their poses, contacts and joints; resume their saved motion independently of other assets.
 
 - Preserve articulation collision filtering and stabilize fixed links between bodies with very different masses while retaining joint limits and drives.

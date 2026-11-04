@@ -19,6 +19,7 @@ export async function probeNeedle(){
   const body=asset.bodies.get('/Body').body,component=asset.rigidbodies.get('/Body'),collider=asset.colliderComponents.get(asset.bodies.get('/Body').colliders[0].handle);
   check(Engine.getComponent(object,Engine.Rigidbody)===component,'Engine body lookup failed');
   asset.play();body.setLinvel({x:0,y:-1,z:0},true);asset.pause();
+  check(asset.bodyForObject(object)===asset.bodies.get('/Body'),'paused render object lost body identity');
   component.drag=.5;component.updateProperties();
   for(let i=0;i<30;i++){physics.step(1/60);physics.postStep();}
   check(Math.abs(body.translation().y-3)<1e-6,'Engine property update or world step thawed paused asset');
