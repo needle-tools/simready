@@ -1,0 +1,16 @@
+import R,{type World,type RigidBody} from 'rapier-legacy';
+import {createSimulationWorld,createSimulation} from '@needle-tools/simready/rapier';
+import {type SimreadyRuntime} from '@needle-tools/simready/gltf';
+import {type PhysicsSnapshot} from '@needle-tools/simready';
+declare const snapshot:PhysicsSnapshot;
+declare const runtime:SimreadyRuntime;
+const host=createSimulationWorld({rapier:R});
+const world:World=host.world;
+const asset=await host.addAsset({snapshot});
+const body:RigidBody=asset.bodies.get('/Body')!.body;
+const gltf=await runtime.createSimulation({world:host});
+const imported:RigidBody=gltf.bodies.get('/Body')!.body;
+const direct=await createSimulation({rapier:R,snapshot});
+const directWorld:World=direct.world;
+const directBody:RigidBody=direct.bodies.get('/Body')!.body;
+void [world,body,imported,directWorld,directBody];

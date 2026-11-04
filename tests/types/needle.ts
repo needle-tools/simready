@@ -1,0 +1,14 @@
+import {type Context,type Rigidbody,type Collider,type RapierPhysics} from '@needle-tools/engine';
+import {createNeedleSimulationWorld} from '@needle-tools/simready/needle';
+import {type PhysicsSnapshot} from '@needle-tools/simready';
+import {type SimreadyRuntime} from '@needle-tools/simready/gltf';
+declare const context:Context,snapshot:PhysicsSnapshot,runtime:SimreadyRuntime;
+const host=await createNeedleSimulationWorld({context});
+const world:NonNullable<RapierPhysics['world']>=host.world;
+const asset=await host.addAsset({snapshot});
+const component:Rigidbody|undefined=asset.rigidbodies.get('/Body');
+const collider:Collider|undefined=asset.colliderComponents.get(0);
+const retained:Rigidbody|undefined=host.assets.get(asset.id)?.rigidbodies.get('/Body');
+const gltf=await runtime.createSimulation({world:host});
+const imported:NonNullable<RapierPhysics['world']>=gltf.world;
+void [world,component,collider,retained,imported];

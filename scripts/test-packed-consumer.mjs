@@ -30,6 +30,7 @@ export async function probe(){
  const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1]},{translation:[0,3,0]}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:extension}};
  const result=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(json),'');
  const runtime=result.userData.simready;check(!runtime.handle,'glTF must not manufacture a USD handle');
+ const mechanism=await runtime.createMechanism();mechanism.update(1/120);mechanism.dispose();
  const host=createSimulationWorld({rapier:R});
  try{
   const floor={...snapshot,bodies:[],shapes:[{path:'/Floor',type:'cube',body:'',position:[0,-.5,0],rotation:q,halfExtents:[5,.5,5]}]};

@@ -1,16 +1,92 @@
+// @ts-check
+
+/** @typedef {import('./index.js').PhysicsSnapshot} PhysicsSnapshot */
+/** @typedef {import('./index.js').PhysicsBody} PhysicsBody */
+/** @typedef {import('./index.js').PhysicsShape} PhysicsShape */
+/** @typedef {import('./index.js').PhysicsJoint} PhysicsJoint */
+/** @typedef {import('./index.js').PhysicsDrive} PhysicsDrive */
+/** @typedef {import('./index.js').PhysicsIssue} PhysicsIssue */
+/** @typedef {import('./index.js').PhysicsVector} PhysicsVector */
+/** @typedef {import('./index.js').PhysicsRotation} PhysicsRotation */
+/** @typedef {import('./rapier-types.js').RigidBody} RigidBody */
+/** @typedef {import('./rapier-types.js').Collider} Collider */
+/** @typedef {import('./rapier-types.js').Joint} Joint */
+/** @typedef {import('./rapier-types.js').RigidBodyDescriptor} RigidBodyDescriptor */
+/** @typedef {import('./rapier-types.js').JointDescriptor} JointDescriptor */
+/** @template {RigidBody} [B=RigidBody]
+ * @typedef {import('./rapier-types.js').World<B>} World */
+/** @template {RigidBody} [B=RigidBody]
+ * @template {World<B>} [W=World<B>]
+ * @typedef {import('./rapier-types.js').RapierModule<B,W>} RapierModule */
+/** @template {RapierModule} R
+ * @typedef {InstanceType<R['World']>} WorldOf */
+/** @template {RapierModule} R
+ * @typedef {ReturnType<WorldOf<R>['createRigidBody']>} BodyOf */
+/** @typedef {{sync():void, reset():void, dispose?():void,
+ * bodyForObject(object:unknown,instanceIndex?:number):unknown,
+ * root?:import('three').Object3D,bindings?:import('./three.js').ObjectBinding[]}} VisualBinding */
+/** @template [B=RigidBody]
+ * @typedef {{data:PhysicsBody,body:B,colliders:Collider[]}} SimulationBodyRecord */
+/** @template [B=RigidBody]
+ * @typedef {Map<string,SimulationBodyRecord<B>>} SimulationBodies */
+/** @template [B=RigidBody]
+ * @typedef {{data:PhysicsShape,collider:Collider,owner?:SimulationBodyRecord<B>}} SimulationColliderRecord */
+/** @template [B=RigidBody]
+ * @typedef {Map<number,SimulationColliderRecord<B>>} SimulationColliders */
+/** @template [W=World]
+ * @template [B=RigidBody]
+ * @typedef {{
+ * readonly backend:{name:'rapier',jointSolver:'impulse'|'hybrid',adaptations:Array<{path:string,source:string,target:string,reason:string}>},
+ * readonly world:W,readonly bodies:SimulationBodies<B>,readonly colliders:SimulationColliders<B>,
+ * readonly joints:Map<string,Joint>,readonly unsupported:PhysicsIssue[],
+ * play():void,pause():void,isPlaying():boolean,update(dt:number):void,step(dt?:number):void,
+ * getJointValue(path:string):number|null,setJointTarget(path:string,target:{position?:number,velocity?:number}):boolean,
+ * reset():void,dispose():void,bodyForObject(object:unknown,instanceIndex?:number):unknown,
+ * beginDrag(path:string,position:import('./rapier-types.js').Vector):boolean,
+ * moveDrag(position:import('./rapier-types.js').Vector):void,endDrag():void
+ * }} Simulation */
+/** @template {RigidBody} [B=RigidBody]
+ * @template {World<B>} [W=World<B>]
+ * @typedef {{snapshot:PhysicsSnapshot,rapier:RapierModule<B,W>,scenePath?:string,allowPartial?:boolean,mode?:'simulation'|'interaction',
+ * bindVisuals?:(bodies:SimulationBodies<B>,warn:(item:{path:string,type?:string},reason:string)=>void,signal:AbortSignal,colliders:SimulationColliders<B>)=>VisualBinding|Promise<VisualBinding>}} SimulationOptions */
+/** @template {RigidBody} [B=RigidBody]
+ * @typedef {Omit<SimulationOptions<B>,'rapier'> & {id?:string,position?:PhysicsVector,rotation?:PhysicsRotation}} WorldAssetOptions */
+/** @template [W=World]
+ * @template [B=RigidBody]
+ * @typedef {Simulation<W,B> & {readonly id:string,readonly snapshot:PhysicsSnapshot}} SimulationAsset */
+/** @typedef {import('./rapier-types.js').PhysicsHooks} SimulationHooks */
+/** @typedef {{hooks:SimulationHooks,afterStep():void,dispose():void}} SimulationWorldExtension */
+/** @template [W=World]
+ * @template {RigidBody} [B=RigidBody]
+ * @typedef {{readonly ownsWorld:boolean,readonly hooks:SimulationHooks,sync():void,
+ * readonly metersPerUnit:number,readonly kilogramsPerUnit:number,readonly world:W,
+ * readonly assets:ReadonlyMap<string,SimulationAsset<W,B>>,
+ * addAsset(options:WorldAssetOptions<B>):Promise<SimulationAsset<W,B>>,
+ * removeAsset(id:string):boolean,step(dt?:number):void,dispose():void}} SimulationWorld */
+/** @template W
+ * @typedef {{world:W,events:import('./rapier-types.js').EventQueue|undefined,isDisposed():boolean,
+ * trackResources(cleanup:()=>void):()=>void,register(entry:{hooks:SimulationHooks,sync():void}):()=>void}} WorldContext */
+
 import {jointValue} from './jointCoordinates.js';
 import { Quaternion, Vector3 } from 'three';
 import {shiftInertiaToCenterOfMass} from './massProperties.js';
 import {validateSnapshot,getSnapshotIssues} from './index.js';
+import {isNumberBuffer} from './validation.js';
 import {transformSnapshot} from './transform.js';
+/** @param {PhysicsVector} [a] */
 const vector = (a = [0, 0, 0]) => ({ x: a[0], y: a[1], z: a[2] });
+/** @param {PhysicsRotation} [a] */
 const rotation = (a = [0, 0, 0, 1]) => ({ x: a[0], y: a[1], z: a[2], w: a[3] });
+/** @param {PhysicsRotation | undefined} a */
 const q = a => new Quaternion().fromArray(a || [0, 0, 0, 1]);
+/** @param {string | undefined} name */
 const axis = name => new Vector3(...(name === 'X' ? [1, 0, 0] : name === 'Z' ? [0, 0, 1] : [0, 1, 0]));
+/** @param {string} parent @param {string} child */
 const contains = (parent, child) => child === parent || child.startsWith(parent + '/');
 const emptyVisualBinding = {sync(){},reset(){},bodyForObject(){return null;}};
 
 /** Descriptors the Rapier adapter cannot simulate, known before loading its runtime. */
+/** @param {PhysicsSnapshot} snapshot */
 export function getSimulationLimitations(snapshot) {
     const issues=[...(snapshot.unsupported||[]),...getSnapshotIssues(snapshot)];
     for(const shape of snapshot.shapes||[])if(shape.collisionEnabled!==false && shape.type==='mesh' && shape.approximation && !['none','convexHull','sdf'].includes(shape.approximation))
@@ -23,8 +99,13 @@ export function getSimulationLimitations(snapshot) {
  * Create a simulation in stage coordinates. Supply an initialized Rapier module;
  * importing the USD renderer alone does not download another WASM runtime.
  */
+/** @template {RigidBody} B
+ * @template {World<B>} W
+ * @param {SimulationOptions<B,W> & {worldContext?:WorldContext<W>}} options
+ * @returns {Promise<Simulation<W,B>>}
+ */
 export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 'simulation', allowPartial = false, bindVisuals, worldContext }) {
-    snapshot={bodies:[],shapes:[],joints:[],materials:[],groups:[],scenes:[],...snapshot};
+    snapshot=Object.assign({bodies:[],shapes:[],joints:[],materials:[],groups:[],scenes:[]},snapshot);
     validateSnapshot(snapshot);
     if (!R?.World) throw new TypeError('Supply an initialized Rapier module.');
     const initialIssues=getSimulationLimitations(snapshot).filter(item=>mode!=='interaction'||!/Shape$|^mesh$|^Articulation$/.test(item.type||''));
@@ -33,32 +114,59 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     if (scenes.length > 1 && !scenePath) throw new Error('Select a USD physics scene before simulating.');
     const scene = scenePath ? scenes.find(s => s.path === scenePath) : scenes[0];
     if (scenePath && !scene) throw new Error(`USD physics scene not found: ${scenePath}`);
-    const mpu = snapshot.metersPerUnit > 0 ? snapshot.metersPerUnit : 0.01;
-    const kgpu = snapshot.kilogramsPerUnit > 0 ? snapshot.kilogramsPerUnit : 1;
+    const mpu = (snapshot.metersPerUnit ?? 0) > 0 ? snapshot.metersPerUnit ?? 0.01 : 0.01;
+    const kgpu = (snapshot.kilogramsPerUnit ?? 0) > 0 ? snapshot.kilogramsPerUnit ?? 1 : 1;
     const direction = scene?.gravityDirection || (snapshot.upAxis === 'Z' ? [0, 0, -1] : [0, -1, 0]);
-    const magnitude = Number.isFinite(scene?.gravityMagnitude) && scene.gravityMagnitude >= 0 ? scene.gravityMagnitude : 9.81 / mpu;
+    const magnitude = scene?.gravityMagnitude !== undefined && Number.isFinite(scene.gravityMagnitude) && scene.gravityMagnitude >= 0 ? scene.gravityMagnitude : 9.81 / mpu;
     const gravity = new Vector3().fromArray(direction).normalize().multiplyScalar(magnitude);
     const ownsWorld = !worldContext;
     const world = worldContext?.world || new R.World(mode === 'interaction' ? {x:0,y:0,z:0} : gravity);
     // Rapier dispatches contact hooks only through stepWithEvents.
     const events = ownsWorld ? new R.EventQueue(true) : worldContext.events;
     if (ownsWorld) { world.timestep = 1 / 120; world.lengthUnit = 1 / mpu; world.numSolverIterations = 12; }
-    const bodies = new Map(), colliders = new Map(), joints = new Map(), controls = new Map();
+    /** @type {SimulationBodies<B>} */
+    const bodies = new Map();
+    /** @type {SimulationColliders<B>} */
+    const colliders = new Map();
+    /** @type {Map<string,Joint>} */
+    const joints = new Map();
+    /** @type {Map<string,{data:PhysicsJoint,drive:PhysicsDrive|undefined}>} */
+    const controls = new Map();
     // Joint inspection does not solve contacts or require PhysX SDF colliders
     // or a reduced-coordinate articulation. Its dependent joints still share
     // one constraint solver, including closed loops and fixed attachments.
     const unsupported = initialIssues;
+    /** @type {Simulation<W,B>['backend']} */
     const backend = {name:'rapier',jointSolver:'impulse',adaptations:(snapshot.articulations || []).map(articulation => ({
         path:articulation.path,source:'reduced-coordinate articulation',target:'impulse constraints',
         reason:'Authored links, joint frames, limits, drives and collision filters are retained in the impulse solver.',
     }))};
+    /** @param {{path:string,type?:string}} item @param {string} reason */
     const warn = (item, reason) => {if(!unsupported.some(issue=>issue.path===item.path&&issue.reason===reason))unsupported.push({ path: item.path, type: item.type, reason });};
+    /** @param {{simulationOwners?: string[]}} item */
     const inScene = item => item.simulationOwners?.length ? !!scene && item.simulationOwners.includes(scene.path)
         : !scene || scene.path === scenes[0]?.path;
-    let playing = false, disposed = false, accumulator = 0, drag = null, pausedBodies = null;
-    const ownedBodies = new Set(), ownedColliders = new Set(), ownedJoints = new Set(), ownedMultibodyJoints = new Set();
+    let playing = false, disposed = false, accumulator = 0;
+    /** @type {{anchor:B,joint:Joint,pinned:Array<{body:B,type:number}>}|null} */
+    let drag = null;
+    /** @type {Map<B,{type:number,linear:import('./rapier-types.js').Vector,angular:import('./rapier-types.js').Vector,nextPosition:import('./rapier-types.js').Vector,nextRotation:import('./rapier-types.js').Rotation,sleeping:boolean,enabled:boolean}>|null} */
+    let pausedBodies = null;
+    /** @type {Set<B>} */
+    const ownedBodies = new Set();
+    /** @type {Set<Collider>} */
+    const ownedColliders = new Set();
+    /** @type {Set<Joint>} */
+    const ownedJoints = new Set();
+    /** @type {Set<Joint>} */
+    const ownedMultibodyJoints = new Set();
     const bindingAbort = new AbortController();
-    let visuals, unregister, unregisterResources, released = false, visualsDisposed = false;
+    /** @type {VisualBinding | undefined} */
+    let visuals;
+    /** @type {(()=>void)|undefined} */
+    let unregister;
+    /** @type {(()=>void)|undefined} */
+    let unregisterResources;
+    let released = false, visualsDisposed = false;
     const release = () => {
         // A pending binding can resolve after host disposal. Its registration
         // cleanup still runs, without touching the already released world.
@@ -72,7 +180,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         bindingAbort.abort();
         unregister?.();
         unregisterResources?.();
-        if (ownsWorld) { try{events.free();}finally{world.free();} }
+        if (ownsWorld) { try{events?.free();}finally{world.free();} }
         else {
             for (const joint of ownedMultibodyJoints) if (world.multibodyJoints.contains(joint.handle)) world.removeMultibodyJoint(joint, true);
             for (const joint of ownedJoints) if (world.impulseJoints.contains(joint.handle)) world.removeImpulseJoint(joint, true);
@@ -82,7 +190,9 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         if (cleanupError) throw cleanupError;
     };
     unregisterResources = worldContext?.trackResources(() => {try{visuals?.reset();}finally{release();}});
+    /** @param {RigidBodyDescriptor} desc */
     const makeBody = desc => { const body = world.createRigidBody(desc); ownedBodies.add(body); return body; };
+    /** @param {JointDescriptor} desc @param {B} a @param {B} b */
     const makeJoint = (desc, a, b) => { const joint = world.createImpulseJoint(desc, a, b, true); ownedJoints.add(joint); return joint; };
 
     try {
@@ -100,22 +210,25 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         const materialMap = new Map((snapshot.materials || []).map(m => [m.path, m]));
         for (const data of mode === 'interaction' ? [] : snapshot.shapes || []) {
             if (data.collisionEnabled === false || !inScene(data)) continue;
-            const owner = bodies.get(data.body);
+            const owner = bodies.get(data.body ?? '');
             if (data.body && !owner) continue;
             let desc, extraRotation = new Quaternion();
             switch (data.type) {
-                case 'cube': desc = R.ColliderDesc.cuboid(...data.halfExtents); break;
-                case 'sphere': desc = R.ColliderDesc.ball(data.radius); break;
-                case 'capsule': desc = R.ColliderDesc.capsule(data.halfHeight, data.radius); break;
-                case 'cylinder': desc = R.ColliderDesc.cylinder(data.halfHeight, data.radius); break;
-                case 'cone': desc = R.ColliderDesc.cone(data.halfHeight, data.radius); break;
-                case 'plane': desc = R.ColliderDesc.halfspace(axis(data.axis)); break;
+                case 'cube': if (!data.halfExtents) throw new TypeError('Cube collider requires halfExtents.'); desc = R.ColliderDesc.cuboid(...data.halfExtents); break;
+                case 'sphere': if (data.radius === undefined) throw new TypeError('Sphere collider requires radius.'); desc = R.ColliderDesc.ball(data.radius); break;
+                case 'capsule': case 'cylinder': case 'cone':
+                    if (data.radius === undefined || data.halfHeight === undefined) throw new TypeError('Collider requires radius and halfHeight.');
+                    desc = R.ColliderDesc[data.type](data.halfHeight, data.radius); break;
+                case 'plane':
+                    if(!R.ColliderDesc.halfspace){warn(data,'Plane colliders require Rapier halfspace support.');continue;}
+                    desc = R.ColliderDesc.halfspace(axis(data.axis)); break;
                 case 'mesh': {
+                    if(data.points!==undefined&&!isNumberBuffer(data.points)||data.indices!==undefined&&!isNumberBuffer(data.indices))throw new TypeError('Invalid mesh collision buffers.');
                     const points = Float32Array.from(data.points || [], (v, i) => v * (data.meshScale?.[i % 3] ?? 1));
                     if (!points.length) { warn(data, 'Mesh collision points are unavailable.'); continue; }
                     if (data.approximation === 'convexHull') desc = R.ColliderDesc.convexHull(points);
                     else if (data.approximation === 'sdf') {
-                        if (!R.ColliderDesc.convexDecomposition) {warn(data,'SDF-source mesh collision requires Rapier convex decomposition support.');continue;}
+                        if (!R.ColliderDesc.convexDecomposition || !R.CompoundFlags) {warn(data,'SDF-source mesh collision requires Rapier convex decomposition support.');continue;}
                         desc = R.ColliderDesc.convexDecomposition(points,Uint32Array.from(data.indices || []),
                             {resolution:64,concavity:.001,maxConvexHulls:128},R.CompoundFlags.FIX_INTERNAL_EDGES);
                         backend.adaptations.push({path:data.path,source:'sdf',target:'convex decomposition',
@@ -135,24 +248,25 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             const r = q(data.rotation).multiply(extraRotation);
             const material = data.materials?.map(path => materialMap.get(path)).find(Boolean);
             desc.setFriction(material?.dynamicFriction ?? 0.5).setRestitution(material?.restitution ?? 0);
-            const density = data.density > 0 ? data.density : owner?.data.density > 0 ? owner.data.density : material?.density;
+            const density = (data.density ?? 0) > 0 ? data.density ?? 0 : (owner?.data.density ?? 0) > 0 ? owner?.data.density ?? 0 : material?.density ?? 0;
             desc.setDensity(density > 0 ? density * kgpu : 1000 * mpu ** 3);
-            if (data.mass > 0) desc.setMass(data.mass * kgpu);
+            if ((data.mass ?? 0) > 0) desc.setMass((data.mass ?? 0) * kgpu);
             if (data.path !== owner?.data.path && (data.centerOfMass || data.diagonalInertia || data.principalAxes)) {
                 // Probe the shape in its own frame to fill unauthored moments.
                 // The temporary body never participates in a simulation step.
-                const complete = data.mass > 0 && data.centerOfMass && data.diagonalInertia;
+                const complete = (data.mass ?? 0) > 0 && data.centerOfMass && data.diagonalInertia;
                 const probe = complete ? null : makeBody(R.RigidBodyDesc.dynamic());
+                const requireProbe = () => {if (!probe) throw new Error('Incomplete collider mass properties.'); return probe;};
                 try {
                     if (probe) {world.createCollider(desc, probe);probe.recomputeMassPropertiesFromColliders();}
-                    const mass = complete ? data.mass * kgpu : probe.mass(), inverseShape = extraRotation.clone().invert();
+                    const mass = complete ? (data.mass ?? 0) * kgpu : requireProbe().mass(), inverseShape = extraRotation.clone().invert();
                     const center = data.centerOfMass
                         ? new Vector3().fromArray(data.centerOfMass).multiply(new Vector3().fromArray(data.scale || [1,1,1])).applyQuaternion(inverseShape)
-                        : probe.localCom();
-                    let inertia = data.diagonalInertia ? new Vector3().fromArray(data.diagonalInertia).multiplyScalar(kgpu) : probe.principalInertia();
-                    let frame = data.principalAxes || data.diagonalInertia ? inverseShape.multiply(q(data.principalAxes)) : probe.principalInertiaLocalFrame();
+                        : requireProbe().localCom();
+                    let inertia = data.diagonalInertia ? new Vector3().fromArray(data.diagonalInertia).multiplyScalar(kgpu) : requireProbe().principalInertia();
+                    let frame = data.principalAxes || data.diagonalInertia ? inverseShape.multiply(q(data.principalAxes)) : requireProbe().principalInertiaLocalFrame();
                     if (data.centerOfMass && !data.diagonalInertia) {
-                        const shifted = shiftInertiaToCenterOfMass(inertia,frame,mass,probe.localCom(),center);
+                        const shifted = shiftInertiaToCenterOfMass(inertia,frame,mass,requireProbe().localCom(),center);
                         inertia = shifted.diagonalInertia;frame = shifted.principalAxes;
                     }
                     desc.setMassProperties(mass,center,inertia,frame);
@@ -166,8 +280,8 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         }
         for (const { data, body, colliders: owned } of bodies.values()) {
             body.recomputeMassPropertiesFromColliders();
-            if (mode!=='interaction' && !(data.mass > 0) && !data.centerOfMass && !data.diagonalInertia && !data.principalAxes) continue;
-            const oldMass = body.mass(), mass = data.mass > 0 ? data.mass * kgpu : oldMass || (mode==='interaction'?1:0);
+            if (mode!=='interaction' && !((data.mass ?? 0) > 0) && !data.centerOfMass && !data.diagonalInertia && !data.principalAxes) continue;
+            const oldMass = body.mass(), mass = (data.mass ?? 0) > 0 ? (data.mass ?? 0) * kgpu : oldMass || (mode==='interaction'?1:0);
             let inertia = data.diagonalInertia ? new Vector3().fromArray(data.diagonalInertia).multiplyScalar(kgpu)
                 : new Vector3().copy(body.principalInertia()).multiplyScalar(oldMass > 0 ? mass / oldMass : 1);
             const com = data.centerOfMass ? new Vector3().fromArray(data.centerOfMass).multiply(new Vector3().fromArray(data.scale || [1, 1, 1])) : body.localCom();
@@ -188,8 +302,10 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         const fixedWorld = makeBody(R.RigidBodyDesc.fixed());
         // Fixed reduced-coordinate links eliminate ill-conditioned tiny bodies
         // between heavy links, without giving up movable-joint drives and limits.
+        /** @type {Map<number,number>} */
         const fixedParents = new Map();
-        const fixedRoot = handle => {while(fixedParents.has(handle))handle=fixedParents.get(handle);return handle;};
+        /** @param {number} handle */
+        const fixedRoot = handle => {let parent;while((parent=fixedParents.get(handle))!==undefined)handle=parent;return handle;};
         for (const data of snapshot.joints || []) {
             if (data.jointEnabled === false) continue;
             const b0 = data.body0 ? bodies.get(data.body0)?.body : fixedWorld;
@@ -204,14 +320,16 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             } else if (data.type === 'revolute' || data.type === 'prismatic') {
                 // Rapier's public unit-joint API accepts a shared local axis/frame.
                 // Never discard independently authored frames or their limit origin.
-                if (!R.ImpulseJoint?.prototype.setLocalFrame1 && (q(data.rotation0).angleTo(q(data.rotation1)) > 1e-5 ||
+                if ((!R.ImpulseJoint?.prototype.setLocalFrame1 || !R.ImpulseJoint?.prototype.setLocalFrame2) && (q(data.rotation0).angleTo(q(data.rotation1)) > 1e-5 ||
                     (data.type === 'prismatic' && q(data.rotation0).angleTo(new Quaternion()) > 1e-5))) {
                     warn(data, 'Independent joint frame rotations are not supported by this Rapier adapter.'); continue;
                 }
                 const jointAxis = axis(data.axis).applyQuaternion(q(data.rotation0));
                 desc = R.JointData[data.type](a0, a1, jointAxis);
             } else if (data.type === 'distance' && !data.minEnabled && data.maxEnabled) {
-                desc = R.JointData.rope(data.limit?.upper ?? data.maxDistance, a0, a1);
+                const distance=data.limit?.upper??data.maxDistance;
+                if(distance===undefined){warn(data,'Distance joint requires an upper limit.');continue;}
+                desc = R.JointData.rope(distance, a0, a1);
             } else { warn(data, 'Joint type or limits are not supported.'); continue; }
             if (Number.isFinite(data.breakForce) || Number.isFinite(data.breakTorque)) {
                 warn(data, 'Joint breaking thresholds are not supported.');
@@ -236,7 +354,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                         reason:root0 === root1 ? 'The fixed constraint closes a reduced-coordinate loop.'
                             : 'The fixed constraint connects internal links of two reduced-coordinate trees.'});
             }
-            if ((data.type === 'revolute' || data.type === 'prismatic') && joint.setLocalFrame1) {
+            if ((data.type === 'revolute' || data.type === 'prismatic') && joint.setLocalFrame1 && joint.setLocalFrame2) {
                 // Rapier unit joints use X in their local frame. Rotate that
                 // basis into USD's authored axis, then apply each local frame.
                 const basis = new Quaternion().setFromUnitVectors(new Vector3(1,0,0),axis(data.axis));
@@ -248,16 +366,17 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             if (data.limit?.enabled && joint.setLimits) joint.setLimits((data.limit.lower ?? -Infinity) * unit, (data.limit.upper ?? Infinity) * unit);
             if (data.drive?.enabled && joint.configureMotor) {
                 const d = data.drive;
-                if (Number.isFinite(d.forceLimit)) {
+                if (d.forceLimit != null && Number.isFinite(d.forceLimit)) {
                     if(joint.setMotorMaxForce)joint.setMotorMaxForce(d.forceLimit*kgpu);
                     else warn(data, 'Drive force limits are not supported by this Rapier version.');
                 }
-                joint.configureMotorModel(d.acceleration ? R.MotorModel.AccelerationBased : R.MotorModel.ForceBased);
+                if(joint.configureMotorModel)joint.configureMotorModel(d.acceleration ? R.MotorModel.AccelerationBased : R.MotorModel.ForceBased);
+                else warn(data,'Drive motor modes are not supported by this Rapier version.');
                 const gainScale = (d.acceleration ? 1 : kgpu) / unit;
                 joint.configureMotor(d.targetPosition * unit, d.targetVelocity * unit, d.stiffness * gainScale, d.damping * gainScale);
             }
             joints.set(data.path, joint);
-            controls.set(data.path,{data,drive:{...data.drive}});
+            controls.set(data.path,{data,drive:data.drive?{...data.drive}:undefined});
         }
 
         if (backend.jointSolver === 'hybrid') for (const item of backend.adaptations) if (item.source === 'reduced-coordinate articulation') {
@@ -267,22 +386,27 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         const groupMap = new Map((snapshot.groups || []).map(g => [g.path, g]));
         const groupAliases = new Map();
         for (const group of snapshot.groups || []) for (const path of [group.path, ...(group.mergedGroups || [])]) groupAliases.set(path, group.path);
+        /** @param {string} path */
         const canonicalGroup = path => groupAliases.get(path) || path;
         const articulations = snapshot.articulations || [];
         const articulationByPath = new Map(articulations.map(item => [item.path,item]));
+        /** @param {string} path @param {SimulationColliderRecord<B>} collider */
         const matches = (path, collider) => contains(path,collider.data.path) || path === collider.data.body
-            || articulationByPath.get(path)?.articulatedBodies.includes(collider.data.body);
+            || articulationByPath.get(path)?.articulatedBodies.includes(collider.data.body ?? '');
+        /** @param {SimulationColliderRecord<B>} a @param {SimulationColliderRecord<B>} b */
         const excludes = (a, b) => (a.data.filteredCollisions || []).some(p => matches(p,b))
             || (a.owner?.data.filteredCollisions || []).some(p => matches(p,b))
-            || articulations.some(item => item.articulatedBodies.includes(a.data.body) && item.filteredCollisions.some(p => matches(p,b)));
+            || articulations.some(item => item.articulatedBodies.includes(a.data.body ?? '') && item.filteredCollisions.some(p => matches(p,b)));
+        /** @param {SimulationColliderRecord<B>} a @param {SimulationColliderRecord<B>} b */
         const groupExcludes = (a, b) => (a.data.collisionGroups || []).some(path => {
             const g = groupMap.get(canonicalGroup(path));
             if (!g) return false;
             const filtered = (b.data.collisionGroups || []).some(other => (g.filteredGroups || []).some(target => canonicalGroup(target) === canonicalGroup(other)));
             return g.invertFilteredGroups ? !filtered : filtered;
         });
-        const hooks = {
-            filterContactPair(a, b) {
+        /** @type {SimulationHooks} */
+    const hooks = {
+            filterContactPair(a, b, body1, body2) {
                 const c0 = colliders.get(a), c1 = colliders.get(b);
                 return c0 && c1 && (excludes(c0, c1) || excludes(c1, c0) || groupExcludes(c0, c1) || groupExcludes(c1, c0))
                     ? null : R.SolverFlags.COMPUTE_IMPULSE;
@@ -292,10 +416,11 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         if(!allowPartial && unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}${unsupported.length>1?` (${unsupported.length} unsupported features)`:''}`);
         // Pending visual setup must not expose an unregistered physical asset.
         if(worldContext){for(const body of ownedBodies)body.setEnabled(false);for(const collider of ownedColliders)collider.setEnabled(false);}
-        visuals = await bindVisuals?.(bodies, warn, bindingAbort.signal, colliders) || emptyVisualBinding;
+        const binding = await bindVisuals?.(bodies, warn, bindingAbort.signal, colliders) || emptyVisualBinding;
+        visuals = binding;
         if(!allowPartial&&unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}`);
         if (worldContext?.isDisposed()) throw new Error('Simulation world is disposed.');
-        const sync=visuals.sync;
+        const sync=binding.sync;
         unregister = worldContext?.register({hooks, sync});
         if(worldContext){for(const body of ownedBodies)body.setEnabled(true);for(const collider of ownedColliders)collider.setEnabled(true);for(const {body,data}of bodies.values())if(data.startsAsleep)body.sleep();}
         function endDrag() {
@@ -340,9 +465,16 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 body.resetForces(true); body.resetTorques(true);
                 if (data.startsAsleep) body.sleep();
             }
-            for(const [path,record] of controls)if(record.data.drive?.enabled&&joints.get(path).configureMotor){record.drive={...record.data.drive};const unit=record.data.type==='revolute'?Math.PI/180:1,gain=(record.drive.acceleration?1:kgpu)/unit;joints.get(path).configureMotor(record.drive.targetPosition*unit,record.drive.targetVelocity*unit,record.drive.stiffness*gain,record.drive.damping*gain);}
+            for (const [path, record] of controls) {
+                const joint = joints.get(path);
+                if (!record.data.drive?.enabled || !joint?.configureMotor) continue;
+                record.drive = {...record.data.drive};
+                const drive = record.drive, unit = record.data.type === 'revolute' ? Math.PI / 180 : 1;
+                const gain = (drive.acceleration ? 1 : kgpu) / unit;
+                joint.configureMotor(drive.targetPosition * unit, drive.targetVelocity * unit, drive.stiffness * gain, drive.damping * gain);
+            }
             pauseBodies();
-            visuals.reset();
+            binding.reset();
         }
         return {
             world, bodies, colliders, joints, unsupported, backend,
@@ -368,14 +500,14 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             getJointValue(path) {const record=controls.get(path);return !disposed&&record?jointValue(record.data,bodies):null;},
             setJointTarget(path,{position,velocity}={}) {
                 const record=controls.get(path),joint=joints.get(path);
-                if(disposed||!record?.drive.enabled||!joint?.configureMotor)return false;
+                if(disposed||!record?.drive?.enabled||!joint?.configureMotor)return false;
                 if(position!==undefined&&!Number.isFinite(position)||velocity!==undefined&&!Number.isFinite(velocity))throw new RangeError('Motor targets must be finite.');
                 const drive={...record.drive,targetPosition:position??record.drive.targetPosition,targetVelocity:velocity??record.drive.targetVelocity};
                 const unit=record.data.type==='revolute'?Math.PI/180:1,gain=(drive.acceleration?1:kgpu)/unit;
                 joint.configureMotor(drive.targetPosition*unit,drive.targetVelocity*unit,drive.stiffness*gain,drive.damping*gain);
                 record.drive=drive;return true;
             },
-            bodyForObject: (...args) => disposed ? null : visuals.bodyForObject(...args),
+            bodyForObject: (...args) => disposed ? null : binding.bodyForObject(...args),
             beginDrag(path, position) {
                 if (disposed) return false;
                 endDrag();
@@ -394,12 +526,12 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                     // part. All dependent links remain in the same solver.
                     const connected=new Set([path]);let changed=true;
                     while(changed){changed=false;for(const item of snapshot.joints||[]){
-                      if(!joints.has(item.path)||!connected.has(item.body0)&&!connected.has(item.body1))continue;
+                      if(!joints.has(item.path)||!connected.has(item.body0 ?? '')&&!connected.has(item.body1 ?? ''))continue;
                       for(const target of [item.body0,item.body1])if(target&&!connected.has(target)){connected.add(target);changed=true;}
                     }}
-                    const links=(snapshot.joints||[]).filter(item=>joints.has(item.path)&&connected.has(item.body0));
+                    const links=(snapshot.joints||[]).filter(item=>joints.has(item.path)&&connected.has(item.body0 ?? ''));
                     const roots=links.filter(item=>!links.some(other=>other.body1===item.body0)).map(item=>item.body0);
-                    const base=[...new Set(roots)].map(key=>bodies.get(key)).find(item=>item&&item.body!==body);
+                    const base=[...new Set(roots)].map(key=>bodies.get(key ?? '')).find(item=>item&&item.body!==body);
                     if(base?.body.isDynamic()){
                       pinned.push({body:base.body,type:base.body.bodyType()});base.body.setBodyType(R.RigidBodyType.Fixed,true);
                     }
@@ -417,32 +549,48 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
 }
 
 /** One host-owned contact world for independently loaded asset instances. */
-export function createSimulationWorld({rapier: R, world: borrowedWorld, registerWorldExtension, gravity, timestep = 1 / 120, metersPerUnit = 1, kilogramsPerUnit = 1} = {}) {
+/** @template {RigidBody} B
+ * @template {World<B>} W
+ * @param {{rapier:RapierModule<B,W>,world?:W,registerWorldExtension?:(extension:SimulationWorldExtension)=>()=>void,gravity?:PhysicsVector,timestep?:number,metersPerUnit?:number,kilogramsPerUnit?:number}} options
+ * @returns {SimulationWorld<W,B>}
+ */
+export function createSimulationWorld({rapier: R, world: borrowedWorld, registerWorldExtension, gravity, timestep = 1 / 120, metersPerUnit = 1, kilogramsPerUnit = 1}) {
     gravity ||= [0,-9.81/metersPerUnit,0];
     if (!R?.World || !Number.isFinite(metersPerUnit) || !Number.isFinite(kilogramsPerUnit) || !(metersPerUnit > 0) || !(kilogramsPerUnit > 0) || !Number.isFinite(timestep) || timestep <= 0 || gravity.length !== 3 || !gravity.every(Number.isFinite)) throw new TypeError('Invalid Rapier world options.');
     if (borrowedWorld && !(borrowedWorld instanceof R.World)) throw new TypeError('Supply the Rapier module that created the borrowed world.');
     if (registerWorldExtension && !borrowedWorld) throw new TypeError('World extension registration requires a borrowed world.');
     const ownsWorld = !borrowedWorld;
     const world = borrowedWorld || new R.World(vector(gravity)), events = ownsWorld ? new R.EventQueue(true) : undefined;
-    const registrations = new Set(), assets = new Map(), pending = new Set(), resourceCleanup = new Set();
+    /** @type {Set<{hooks:SimulationHooks,sync():void}>} */
+    const registrations = new Set();
+    /** @type {Map<string,SimulationAsset<W,B>>} */
+    const assets = new Map();
+    /** @type {Set<string>} */
+    const pending = new Set();
+    /** @type {Set<()=>void>} */
+    const resourceCleanup = new Set();
     if (ownsWorld) {world.timestep = timestep; world.lengthUnit = 1 / metersPerUnit; world.numSolverIterations = 12;}
     let disposed = false, nextId = 1;
     let freed=false;
-    const finalize=()=>{if(ownsWorld&&disposed&&!pending.size&&!freed){freed=true;try{events.free();}finally{world.free();}}};
+    const finalize=()=>{if(ownsWorld&&disposed&&!pending.size&&!freed){freed=true;try{events?.free();}finally{world.free();}}};
     const active = () => {if (disposed) throw new Error('Simulation world is disposed.');};
+    /** @type {SimulationHooks} */
     const hooks = {
-        filterContactPair(a, b) {
-            for (const entry of registrations) if (entry.hooks.filterContactPair(a, b) === null) return null;
+        filterContactPair(a, b, body1, body2) {
+            for (const entry of registrations) if (entry.hooks.filterContactPair(a, b, body1, body2) === null) return null;
             return R.SolverFlags.COMPUTE_IMPULSE;
         },
         filterIntersectionPair() {return true;},
     };
+    /** @type {WorldContext<W>} */
     const context = {world, events, isDisposed: () => disposed,
         trackResources(cleanup) {resourceCleanup.add(cleanup); return () => resourceCleanup.delete(cleanup);},
         register(entry) {registrations.add(entry); return () => registrations.delete(entry);},
     };
+    /** @type {(()=>void)|undefined} */
     let unregisterHost;
     const sync = () => {active(); for (const entry of registrations) entry.sync();};
+    /** @type {SimulationWorld<W,B>} */
     const host = {
         world, assets, metersPerUnit, kilogramsPerUnit, ownsWorld, hooks, sync,
         async addAsset({snapshot, id = 'asset-' + nextId++, position, rotation, bindVisuals, ...options}) {
@@ -450,6 +598,7 @@ export function createSimulationWorld({rapier: R, world: borrowedWorld, register
             if(options.mode&&options.mode!=='simulation')throw new Error('Shared worlds run dynamics; use createMechanism for posing.');
             if (assets.has(id) || pending.has(id)) throw new Error('Duplicate simulation asset: ' + id);
             pending.add(id);
+            /** @type {Simulation<W,B>|undefined} */
             let runtime;
             try {
                 validateSnapshot(snapshot);
@@ -461,9 +610,9 @@ export function createSimulationWorld({rapier: R, world: borrowedWorld, register
                 const release = runtime.dispose.bind(runtime);
                 let detached=false;
                 runtime.dispose = () => {if(detached)return;detached=true;try{release();}finally{if(assets.get(id)===runtime)assets.delete(id);}};
-                runtime.id = id; runtime.snapshot = resolved;
-                assets.set(id, runtime);
-                return runtime;
+                const asset = Object.assign(runtime,{id,snapshot:resolved});
+                assets.set(id, asset);
+                return asset;
             } finally {pending.delete(id);finalize();}
         },
         removeAsset(id) {active(); const runtime = assets.get(id); runtime?.dispose(); return !!runtime;},

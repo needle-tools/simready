@@ -7,40 +7,44 @@
   "license": "MIT",
   "files": [
     "src",
+    "types",
     "README.md",
     "CHANGELOG.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
+      "types": "./types/index.d.ts",
       "import": "./src/index.js"
     },
     "./rapier": {
-      "types": "./src/rapier.d.ts",
+      "types": "./types/rapier.d.ts",
       "import": "./src/rapier.js"
     },
     "./kinematics": {
-      "types": "./src/kinematics.d.ts",
+      "types": "./types/kinematics.d.ts",
       "import": "./src/kinematics.js"
     },
     "./three": {
-      "types": "./src/three.d.ts",
+      "types": "./types/three.d.ts",
       "import": "./src/three.js"
     },
     "./gltf": {
-      "types": "./src/gltf.d.ts",
+      "types": "./types/gltf.d.ts",
       "import": "./src/gltf.js"
     },
     "./package.json": "./package.json",
     "./needle": {
-      "types": "./src/needle.d.ts",
+      "types": "./types/needle.d.ts",
       "import": "./src/needle.js"
     }
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "test:packed-consumer": "node scripts/test-packed-consumer.mjs"
+    "test:packed-consumer": "node scripts/test-packed-consumer.mjs",
+    "build:types": "tsc -p tsconfig.types.json",
+    "prepack": "npm run build:types",
+    "test:types": "npm run build:types && node scripts/test-types.mjs"
   },
   "peerDependencies": {
     "three": ">=0.160.0",
@@ -54,7 +58,9 @@
   "devDependencies": {
     "three": "^0.185.1",
     "@dimforge/rapier3d-compat": "0.21.0",
-    "@types/three": "^0.164.1"
+    "@types/three": "^0.185.1",
+    "typescript": "^5.9.3",
+    "@needle-tools/engine": "6.0.0-alpha.7"
   },
   "publishConfig": {
     "access": "public"

@@ -269,3 +269,9 @@ rather than PhysX SDF evaluation. `backend.adaptations` describes conversions.
 Unsupported features reject by default; `allowPartial: true` returns diagnostics.
 Simulation and motor targets do not modify authored data. Custom async visual
 bindings must check their abort signal after each await before accessing bodies.
+
+## Development
+
+`npm run build:types` checks the JavaScript and generates package declarations.
+Commit the generated types with source changes; `prepack` rebuilds them.
+Run `npm test` for the runtime and `npm run test:types` for packed TypeScript consumers.

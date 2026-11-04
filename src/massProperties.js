@@ -1,7 +1,9 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 
+/** @param {import('./index.js').PhysicsVector | Float32Array | import('three').Vector3Like} value */
 const vec = value => Array.isArray(value) || ArrayBuffer.isView(value)
     ? new Vector3().fromArray(value) : new Vector3().copy(value);
+/** @param {import('./index.js').PhysicsRotation | Float32Array | import('three').QuaternionLike} value */
 const quat = value => Array.isArray(value) || ArrayBuffer.isView(value)
     ? new Quaternion().fromArray(value) : new Quaternion().copy(value);
 
@@ -10,6 +12,12 @@ const quat = value => Array.isArray(value) || ArrayBuffer.isView(value)
  * UsdPhysicsMassProperties::TranslateInertia. Inputs share one body-local,
  * scale-free frame; mass and diagonalInertia must already use the same units.
  * Returns Rapier-compatible diagonal moments and their local principal frame.
+ */
+/** @param {import('./index.js').PhysicsVector | Float32Array | import('three').Vector3Like} diagonalInertia
+ * @param {import('./index.js').PhysicsRotation | Float32Array | import('three').QuaternionLike} principalAxes
+ * @param {number} mass
+ * @param {import('./index.js').PhysicsVector | Float32Array | import('three').Vector3Like} oldCenterOfMass
+ * @param {import('./index.js').PhysicsVector | Float32Array | import('three').Vector3Like} newCenterOfMass
  */
 export function shiftInertiaToCenterOfMass(diagonalInertia, principalAxes, mass, oldCenterOfMass, newCenterOfMass) {
     const diagonal = vec(diagonalInertia);

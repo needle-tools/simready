@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Match TypeScript descriptors to runtime defaults and retain native Rapier types when creating simulations from glTF.
 - Load SimReady glTF assets in Three.js and Needle Engine.
 - Run standalone or shared-world Rapier simulation in browsers and Node.js, including interaction with other Needle physics objects.
 - Use the same joint controls and simulation with USD, glTF and code-created assets.

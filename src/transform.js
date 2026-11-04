@@ -1,24 +1,31 @@
 import {Quaternion, Vector3} from 'three';
 
 /** Convert an independent asset into a host world's coordinates and units. */
+/** @param {import('./index.js').PhysicsSnapshot} source
+ * @param {{metersPerUnit?: number, kilogramsPerUnit?: number, position?: import('./index.js').PhysicsVector, rotation?: import('./index.js').PhysicsRotation}} [options]
+ */
 export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit = 1, position = [0, 0, 0], rotation = [0, 0, 0, 1]} = {}) {
     if (!Number.isFinite(metersPerUnit) || !Number.isFinite(kilogramsPerUnit) || !(metersPerUnit > 0) || !(kilogramsPerUnit > 0) || position.length !== 3 || rotation.length !== 4 || ![...position, ...rotation].every(Number.isFinite) || !rotation.some(Boolean)) throw new RangeError('Invalid simulation world placement or units.');
     const snapshot = structuredClone(source);
-    const length = (source.metersPerUnit > 0 ? source.metersPerUnit : .01) / metersPerUnit;
-    const mass = (source.kilogramsPerUnit > 0 ? source.kilogramsPerUnit : 1) / kilogramsPerUnit;
+    const length = ((source.metersPerUnit ?? 0) > 0 ? source.metersPerUnit ?? .01 : .01) / metersPerUnit;
+    const mass = ((source.kilogramsPerUnit ?? 0) > 0 ? source.kilogramsPerUnit ?? 1 : 1) / kilogramsPerUnit;
     const basis = new Quaternion(...rotation).normalize();
     const up = source.upAxis === 'Z' ? new Vector3(0, 0, 1) : source.upAxis === 'X' ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0);
     basis.multiply(new Quaternion().setFromUnitVectors(up, new Vector3(0, 1, 0)));
     const translate = new Vector3(...position);
-    const local = value => Array.from(value, n => n * length);
+    /** @param {import('./index.js').PhysicsVector} value @returns {import('./index.js').PhysicsVector} */
+    const local = value => [value[0] * length, value[1] * length, value[2] * length];
+    /** @param {import('./index.js').PhysicsVector} value */
     const worldPoint = value => new Vector3(...value).multiplyScalar(length).applyQuaternion(basis).add(translate).toArray();
-    const worldRotation = value => basis.clone().multiply(new Quaternion(...value)).toArray();
+    /** @param {import('./index.js').PhysicsRotation} value @returns {import('./index.js').PhysicsRotation} */
+    const worldRotation = value => { const q = basis.clone().multiply(new Quaternion(...value)); return [q.x,q.y,q.z,q.w]; };
+    /** @param {import('./index.js').PhysicsMass} item */
     const properties = item => {
-        if (item.mass > 0) item.mass *= mass;
+        if ((item.mass ?? 0) > 0) item.mass = (item.mass ?? 0) * mass;
         // USD density is mass / stage-length cubed, not kg / metre cubed.
-        if (item.density > 0) item.density *= mass / length ** 3;
+        if ((item.density ?? 0) > 0) item.density = (item.density ?? 0) * mass / length ** 3;
         if (item.centerOfMass) item.centerOfMass = local(item.centerOfMass);
-        if (item.diagonalInertia) item.diagonalInertia = item.diagonalInertia.map(n => n * mass * length ** 2);
+        if (item.diagonalInertia) item.diagonalInertia = [item.diagonalInertia[0] * mass * length ** 2, item.diagonalInertia[1] * mass * length ** 2, item.diagonalInertia[2] * mass * length ** 2];
     };
     for (const body of snapshot.bodies) {
         body.position = worldPoint(body.position); body.rotation = worldRotation(body.rotation);
@@ -30,33 +37,33 @@ export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit =
         shape.position = shape.body ? local(shape.position || [0, 0, 0]) : worldPoint(shape.position || [0, 0, 0]);
         if (!shape.body) shape.rotation = worldRotation(shape.rotation || [0, 0, 0, 1]);
         if (shape.halfExtents) shape.halfExtents = local(shape.halfExtents);
-        if (Number.isFinite(shape.radius)) shape.radius *= length;
-        if (Number.isFinite(shape.halfHeight)) shape.halfHeight *= length;
-        if (shape.points) shape.points = ArrayBuffer.isView(shape.points) ? shape.points.constructor.from(shape.points, n => n * length) : shape.points.map(n => n * length);
+        if (shape.radius !== undefined && Number.isFinite(shape.radius)) shape.radius *= length;
+        if (shape.halfHeight !== undefined && Number.isFinite(shape.halfHeight)) shape.halfHeight *= length;
+        if (shape.points) shape.points = shape.points.map(n => n * length);
         properties(shape);
     }
     for (const joint of snapshot.joints) {
-        for (const end of [0, 1]) {
-            joint['position' + end] = joint['body' + end] ? local(joint['position' + end] || [0, 0, 0]) : worldPoint(joint['position' + end] || [0, 0, 0]);
-            if (!joint['body' + end]) joint['rotation' + end] = worldRotation(joint['rotation' + end] || [0, 0, 0, 1]);
+        for (const end of /** @type {const} */ ([0, 1])) {
+            joint[end === 0 ? 'position0' : 'position1'] = joint[end === 0 ? 'body0' : 'body1'] ? local(joint[end === 0 ? 'position0' : 'position1'] || [0, 0, 0]) : worldPoint(joint[end === 0 ? 'position0' : 'position1'] || [0, 0, 0]);
+            if (!joint[end === 0 ? 'body0' : 'body1']) joint[end === 0 ? 'rotation0' : 'rotation1'] = worldRotation(joint[end === 0 ? 'rotation0' : 'rotation1'] || [0, 0, 0, 1]);
         }
         const angular = joint.type === 'revolute';
-        if (!angular && joint.limit) for (const key of ['lower', 'upper']) if (Number.isFinite(joint.limit[key])) joint.limit[key] *= length;
-        for (const key of ['minDistance', 'maxDistance']) if (Number.isFinite(joint[key])) joint[key] *= length;
+        if (!angular && joint.limit) for (const key of /** @type {const} */ (['lower', 'upper'])) {const value=joint.limit[key];if(value!==null&&Number.isFinite(value))joint.limit[key]=value*length;}
+        for (const key of /** @type {const} */ (['minDistance', 'maxDistance'])) if (joint[key] !== undefined && Number.isFinite(joint[key])) joint[key] *= length;
         if (joint.mimic && !angular) joint.mimic.offset *= length;
         if (joint.drive) {
             const d = joint.drive, force = mass * length ** (angular ? 2 : 1);
             if (!angular) { d.targetPosition *= length; d.targetVelocity *= length; }
             if (!d.acceleration) { d.stiffness *= force / (angular ? 1 : length); d.damping *= force / (angular ? 1 : length); }
-            if (Number.isFinite(d.forceLimit)) d.forceLimit *= force;
+            if (d.forceLimit != null && Number.isFinite(d.forceLimit)) d.forceLimit *= force;
         }
-        if (Number.isFinite(joint.breakForce)) joint.breakForce *= mass * length;
-        if (Number.isFinite(joint.breakTorque)) joint.breakTorque *= mass * length ** 2;
+        if (joint.breakForce != null && Number.isFinite(joint.breakForce)) joint.breakForce *= mass * length;
+        if (joint.breakTorque != null && Number.isFinite(joint.breakTorque)) joint.breakTorque *= mass * length ** 2;
     }
     for (const material of snapshot.materials) properties(material);
     for (const scene of snapshot.scenes) {
         if (scene.gravityDirection) scene.gravityDirection = new Vector3(...scene.gravityDirection).applyQuaternion(basis).toArray();
-        if (Number.isFinite(scene.gravityMagnitude)) scene.gravityMagnitude *= length;
+        if (scene.gravityMagnitude !== undefined && Number.isFinite(scene.gravityMagnitude)) scene.gravityMagnitude *= length;
     }
     snapshot.metersPerUnit = metersPerUnit; snapshot.kilogramsPerUnit = kilogramsPerUnit; snapshot.upAxis = 'Y';
     return snapshot;
