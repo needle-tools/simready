@@ -1,0 +1,56 @@
+{
+  "name": "@needle-tools/simready",
+  "version": "0.1.0",
+  "description": "SimReady mechanisms, simulation and glTF integration for browser and headless applications",
+  "type": "module",
+  "sideEffects": false,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "files": [
+    "src",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./rapier": {
+      "types": "./src/rapier.d.ts",
+      "import": "./src/rapier.js"
+    },
+    "./kinematics": {
+      "types": "./src/kinematics.d.ts",
+      "import": "./src/kinematics.js"
+    },
+    "./three": {
+      "types": "./src/three.d.ts",
+      "import": "./src/three.js"
+    },
+    "./gltf": {
+      "types": "./src/gltf.d.ts",
+      "import": "./src/gltf.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:packed-consumer": "node scripts/test-packed-consumer.mjs"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "peerDependenciesMeta": {},
+  "devDependencies": {
+    "three": "^0.185.1",
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "@types/three": "^0.164.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "closed-chain-ik": "https://codeload.github.com/gkjohnson/closed-chain-ik-js/tar.gz/3e01f7ba953daea5b0388135d9390504fd4ea0e2"
+  }
+}
