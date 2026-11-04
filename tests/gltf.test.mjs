@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {Group} from 'three';
+import {Group,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createSimreadyExtension} from '../src/index.js';
 import {registerSimreadyLoader} from '../src/gltf.js';
@@ -30,4 +30,21 @@ test('glTF controllers cannot overlap; stale disposal does not restore a newer p
   const next=await runtime.createSimulation({world:host,id:'next',position:[3,0,0]});first.dispose();
   assert.equal(runtime.root.matrix.elements[12],3);next.dispose();assert.equal(runtime.root.matrix.elements[12],0);
  }finally{host.dispose();}
+});
+
+
+test('standalone simulation preserves stage-local frames beneath a centimetre Z-up glTF root',async()=>{
+ const source={...snapshot,metersPerUnit:.01,upAxis:'Z',scenes:[{path:'/Scene',gravityDirection:[0,0,-1],gravityMagnitude:0}],bodies:[{path:'/Body',position:[0,0,100],rotation:q,mass:2,linearVelocity:[0,0,100]}]};
+ const extension=createSimreadyExtension({snapshot:source,stageNode:0,bindings:[{node:1,path:'/Body'}]});
+ const loaded=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1],translation:[10,2,3],rotation:[-Math.SQRT1_2,0,0,Math.SQRT1_2],scale:[.01,.01,.01]},{translation:[0,0,100]}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:extension}}),'');
+ const runtime=loaded.userData.simready,original=runtime.root.matrix.clone();
+ const simulation=await runtime.createSimulation({rapier:R});
+ try{
+  simulation.step(.1);
+  const body=simulation.bodies.get('/Body').body.translation();assert.ok(Math.abs(body.z-110)<1e-4);
+  const expected=new Vector3(body.x,body.y,body.z).applyMatrix4(runtime.root.matrixWorld);
+  const actual=runtime.bindings[0].object.getWorldPosition(new Vector3());
+  assert.ok(actual.distanceTo(expected)<1e-5);assert.ok(Math.abs(actual.y-3.1)<1e-5);
+ }finally{simulation.dispose();}
+ assert.deepEqual(runtime.root.matrix,original);
 });

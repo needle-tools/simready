@@ -60,7 +60,7 @@ const world = createSimulationWorld({
   world: physics.world,
   registerWorldExtension,
 });
-const assembly = await runtime.createSimulation({world, id: 'assembly'});
+const assembly = await runtime.createSimulation({world, id: 'assembly', position: [0, 0, 0], rotation: [0, 0, 0, 1]});
 // Needle steps its world, delivers collision events and synchronizes the asset.
 // Dispose this adapter when its owning host component is destroyed.
 world.dispose();
@@ -70,7 +70,7 @@ Explicitly disabling the Engine Rapier backend also disables this dynamics path;
 
 Other hosts can pass `world` without a registration callback, compose `world.hooks` with their existing contact filters, and call `world.sync()` after their own physics step. They must call the adapter's `dispose()` before freeing the borrowed Rapier world. Registration automates that lifecycle; it never replaces or patches the host's methods. Custom asynchronous `bindVisuals(bodies, warn, signal)` callbacks must call `signal.throwIfAborted()` after each await before accessing a physics body; disposal aborts pending bindings before releasing the bodies. Hosts without physics can use the standalone world in the previous example.
 
-`addAsset` converts stage units and up axes into the world's Y-up coordinates. World units default to metres and kilograms. Placement uses `position` and quaternion `rotation` in world coordinates. Each asset retains its own path namespace, so repeated imports can share original body and joint paths. The glTF integration places render geometry into the same frame and restores it when detached. The host owns the surrounding scene and its resources.
+`addAsset` converts stage units and up axes into the world's Y-up coordinates. World units default to metres and kilograms. Placement uses explicit `position` and quaternion `rotation` in world coordinates, defaulting to the world origin and identity. Supply the intended placement when attaching an already positioned render asset; attachment replaces its root transform until disposal. Each asset retains its own path namespace, so repeated imports can share original body and joint paths. The glTF integration places render geometry into the same frame and restores it when detached. The host owns the surrounding scene and its resources.
 
 `step(dt)` advances exactly the requested positive duration, independent of playback. For an individual stage-coordinate simulation, `createSimulation({snapshot, rapier})` also provides the legacy playback accumulator through `play`, `pause` and `update`. Use the owning world's `step` for shared assets. Reset and disposal affect only the corresponding asset.
 

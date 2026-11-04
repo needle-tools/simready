@@ -48,18 +48,18 @@ export class NeedleSimreadyLoaderPlugin{
   }
   const bindings=await Promise.all(data.bindings.map(async binding=>({object:await node(binding.node),body:binding.body||binding.path})));
   const ownedBindings=bindings.filter(binding=>snapshot.bodies.some(body=>body.path===binding.body));
-  const bind=(bodies,_warn,worldSpace=false)=>bindVisuals({root,bodies,bindings:ownedBindings,worldSpace});
+  const bind=worldSpace=>(bodies,_warn,signal)=>{signal?.throwIfAborted();return bindVisuals({root,bodies,bindings:ownedBindings,worldSpace});};
   result.userData||={};
   result.userData.simready={snapshot,usdMetadata:encodeMetadata(data.usdMetadata),root,bindings:ownedBindings,mappingIssues:plain(data.mappingIssues||[]),
-   async createMechanism(options={}){return withVisualController(root,async()=>{const{createMechanism}=await import('./kinematics.js');return Object.assign(await createMechanism({...options,snapshot:structuredClone(snapshot),bindVisuals:bind}),{root});});},
+   async createMechanism(options={}){return withVisualController(root,async()=>{const{createMechanism}=await import('./kinematics.js');return Object.assign(await createMechanism({...options,snapshot:structuredClone(snapshot),bindVisuals:bind(false)}),{root});});},
    async createSimulation({world,...options}={}){return withVisualController(root,async()=>{
     if(world){
      const placement=placeAssetRoot(root,snapshot,world,options);
-     try{const simulation=await world.addAsset({...options,snapshot:structuredClone(snapshot),bindVisuals:(bodies,warn)=>bind(bodies,warn,true)});
+     try{const simulation=await world.addAsset({...options,snapshot:structuredClone(snapshot),bindVisuals:bind(true)});
       const dispose=simulation.dispose;let disposed=false;simulation.dispose=()=>{if(disposed)return;disposed=true;try{dispose();}finally{placement.reset();}};return Object.assign(simulation,{root});
      }catch(error){placement.reset();throw error;}
     }
-    const{createSimulation}=await import('./rapier.js');return Object.assign(await createSimulation({...options,snapshot:structuredClone(snapshot),bindVisuals:bind}),{root});
+    const{createSimulation}=await import('./rapier.js');return Object.assign(await createSimulation({...options,snapshot:structuredClone(snapshot),bindVisuals:bind(false)}),{root});
    });},
   };
   runtimes.set(result.scene,result.userData.simready);
