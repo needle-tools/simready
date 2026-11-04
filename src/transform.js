@@ -32,7 +32,7 @@ export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit =
         if (shape.halfExtents) shape.halfExtents = local(shape.halfExtents);
         if (Number.isFinite(shape.radius)) shape.radius *= length;
         if (Number.isFinite(shape.halfHeight)) shape.halfHeight *= length;
-        if (shape.points) shape.points = Array.from(shape.points, n => n * length);
+        if (shape.points) shape.points = ArrayBuffer.isView(shape.points) ? shape.points.constructor.from(shape.points, n => n * length) : shape.points.map(n => n * length);
         properties(shape);
     }
     for (const joint of snapshot.joints) {

@@ -27,6 +27,8 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     snapshot={bodies:[],shapes:[],joints:[],materials:[],groups:[],scenes:[],...snapshot};
     validateSnapshot(snapshot);
     if (!R?.World) throw new TypeError('Supply an initialized Rapier module.');
+    const initialIssues=getSimulationLimitations(snapshot).filter(item=>mode!=='interaction'||!/Shape$|^mesh$|^Articulation$/.test(item.type||''));
+    if(!allowPartial&&initialIssues.length)throw new Error(`Simulation unavailable: ${initialIssues[0].reason}`);
     const scenes = snapshot.scenes || [];
     if (scenes.length > 1 && !scenePath) throw new Error('Select a USD physics scene before simulating.');
     const scene = scenePath ? scenes.find(s => s.path === scenePath) : scenes[0];
@@ -45,7 +47,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     // Joint inspection does not solve contacts or require PhysX SDF colliders
     // or a reduced-coordinate articulation. Its dependent joints still share
     // one constraint solver, including closed loops and fixed attachments.
-    const unsupported = getSimulationLimitations(snapshot).filter(item=>mode!=='interaction'||!/Shape$|^mesh$|^Articulation$/.test(item.type||''));
+    const unsupported = initialIssues;
     const warn = (item, reason) => {if(!unsupported.some(issue=>issue.path===item.path&&issue.reason===reason))unsupported.push({ path: item.path, type: item.type, reason });};
     const inScene = item => item.simulationOwners?.length ? !!scene && item.simulationOwners.includes(scene.path)
         : !scene || scene.path === scenes[0]?.path;
@@ -330,7 +332,10 @@ export function createSimulationWorld({rapier: R, gravity, timestep = 1 / 120, m
             pending.add(id);
             let runtime;
             try {
-                const resolved = transformSnapshot(validateSnapshot(snapshot), {metersPerUnit, kilogramsPerUnit, position, rotation});
+                validateSnapshot(snapshot);
+                const issues=getSimulationLimitations(snapshot);
+                if(!options.allowPartial&&issues.length)throw new Error(`Simulation unavailable: ${issues[0].reason}`);
+                const resolved = transformSnapshot(snapshot, {metersPerUnit, kilogramsPerUnit, position, rotation});
                 runtime = await createSimulation({...options, rapier: R, snapshot: resolved, bindVisuals, worldContext: context});
                 if (disposed) {runtime.dispose(); throw new Error('Simulation world is disposed.');}
                 const release = runtime.dispose.bind(runtime);

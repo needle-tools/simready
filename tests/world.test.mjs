@@ -146,3 +146,13 @@ test('a pending asset stays inactive while the host continues stepping existing 
   host.step(.25);assert.ok(Math.abs(pendingBody.translation().x-.5)<1e-5);
  }finally{host.dispose();}
 });
+
+test('strict unsupported assets reject before reading or copying collision buffers',async()=>{
+ const source=fixture();let reads=0;source.shapes[0].type='mesh';source.shapes[0].approximation='sdf';
+ Object.defineProperty(source.shapes[0],'points',{enumerable:true,get(){reads++;return new Float32Array(12);}});
+ const host=createSimulationWorld({rapier:R});
+ try{
+  await assert.rejects(host.addAsset({snapshot:source}),/sdf/);assert.equal(reads,0);assert.equal(host.world.bodies.len(),0);
+  await assert.rejects(createSimulation({snapshot:source,rapier:R}),/sdf/);assert.equal(reads,0);
+ }finally{host.dispose();}
+});
