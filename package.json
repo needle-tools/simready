@@ -60,7 +60,7 @@
     "@dimforge/rapier3d-compat": "0.21.0",
     "@types/three": "^0.185.1",
     "typescript": "^5.9.3",
-    "@needle-tools/engine": "6.0.0-alpha.7"
+    "@needle-tools/engine": "^6.0.0-alpha.7"
   },
   "publishConfig": {
     "access": "public"
