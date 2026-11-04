@@ -234,43 +234,38 @@ plugin, or `removeUsdPlugin()` when unregistering the USD plugin.
 
 ## Coordinates and stepping
 
-When another host already has a Rapier world, borrow that exact world and its
-module. The adapter adds and removes only its own bodies; it preserves gravity,
-solver settings and the host's event queue. It cannot step a borrowed world.
+| Controller | Linear units | Advancement |
+| --- | --- | --- |
+| Mechanism | Source stage units | `setJointValue()` |
+| Owned simulation world | World units, metres by default | `world.step(dt)` |
+| Borrowed world, including Needle | Host world units | Host physics loop |
 
-Other hosts can pass `world` without a registration callback, compose `world.hooks` with their existing contact filters, and call `world.sync()` after their own physics step. They must call the adapter's `dispose()` before freeing the borrowed Rapier world. Registration automates that lifecycle; it never replaces or patches the host's methods. Custom asynchronous `bindVisuals(bodies, warn, signal, colliders)` callbacks must call `signal.throwIfAborted()` after each await before accessing a physics body; disposal aborts pending bindings before releasing the bodies.
+Hinge values and motor targets use degrees. `addAsset` converts source units and
+up axes to the world's Y-up frame. `position` and quaternion `rotation` set the
+asset's world placement; defaults are the origin and identity. glTF attachment
+replaces the asset root transform and restores it on disposal. Asset paths are
+scoped per instance.
 
-`addAsset` converts stage units and up axes into the world's Y-up coordinates. World units default to metres and kilograms. Placement uses explicit `position` and quaternion `rotation` in world coordinates, defaulting to the world origin and identity. Supply the intended placement when attaching an already positioned render asset; attachment replaces its root transform until disposal. Each asset retains its own path namespace, so repeated imports can share original body and joint paths. The glTF integration places render geometry into the same frame and restores it when detached. The host owns the surrounding scene and its resources.
+New shared assets participate immediately. `pause()` holds their pose while
+keeping contacts and joints; `play()` resumes saved motion. `reset()` restores
+the authored pose and holds it until `play()`. `isPlaying()` tracks explicit
+playback controls and initially returns false.
 
-Mechanism sliders use source stage units. In a shared simulation, slider values
-and motor targets use world units; hinge values remain degrees.
+Standalone `createSimulation()` supports `play()`/`update(dt)` playback and
+manual `step(dt)`, even while paused. Shared assets advance through their world.
+`step(dt)` advances exactly the supplied positive duration.
 
-`step(dt)` advances exactly the requested positive duration. Newly attached assets participate in shared-world steps immediately. Calling an asset's `pause()` holds its current physical pose, retaining colliders and joints while other assets continue moving and contacting it. `play()` resumes its saved body types, velocities and sleep/enabled state. `reset()` restores the authored pose and holds it until playback resumes. These controls affect only the corresponding asset. `isPlaying()` reports playback-control intent and initially returns `false`, including for newly attached assets.
+Borrowed worlds retain host settings and event ownership. Custom hosts compose
+the adapter's `hooks` and call `sync()` after stepping. Dispose the adapter before
+freeing the host world. Needle handles this registration automatically.
 
-For an individual stage-coordinate simulation, `createSimulation({snapshot, rapier})` provides the playback accumulator through `play`, `pause` and `update`. Its explicit `step(dt)` manually advances even while paused, then holds the resulting pose. Use the owning world's `step` for shared assets; it respects each asset's explicit pause. Disposal removes only that asset's resources.
+## Physics support
 
-Simulation never writes authored data. Motor targets are transient controls; `reset` restores authored settings. Kinematic posing and force-driven simulation are separate controllers. Dynamics rejects unsupported features by default and returns diagnostics when `allowPartial: true` is explicitly requested. USD's published compatibility wrappers retain their previous defaults.
+Joint frames, limits, drives, collision filters and mass properties are retained.
+Fixed articulation links use reduced coordinates; movable links use impulse
+constraints. SDF meshes use convex decomposition with concave compound contacts,
+rather than PhysX SDF evaluation. `backend.adaptations` describes conversions.
 
-The data entrypoint exports `createSimreadyExtension`, `encodeMetadata` and `validateSnapshot` without importing Three or a solver. `/three` supplies explicit object/instance bindings and joint helpers; `/gltf` provides the opt-in loader; `/kinematics` and `/rapier` provide controllers. USD extraction and USD-to-glTF conversion remain in `@needle-tools/usd`.
-
-The versioned `NEEDLE_simready` contract retains resolved physics and semantic metadata. It describes the composed configuration; USD layers and alternate variant contents remain part of the source document. Render geometry and collision meshes use ordinary glTF storage.
-
-Custom visual bindings can expose `root` and `bindings` (the explicit object/body
-identities) for host registration. The `@needle-tools/simready/three` helper
-already exposes them. The fourth binding argument contains every collider,
-including shapes without a rigid body. An optional `dispose()` releases host
-registrations before physics resources are freed; `reset()` only restores poses.
-
-The Rapier adapter uses authored triangle surfaces for triangle meshes and cooks
-SDF-labelled source meshes into concave compounds through convex decomposition.
-Cavities remain open for interaction. These are Rapier compound contacts rather
-than PhysX SDF grid evaluation. `simulation.backend.adaptations` records that
-conversion and the articulation solver representation. Fixed articulation links
-use reduced coordinates, preventing tiny intermediate bodies from destabilizing
-heavy links. Movable joints retain authored frames, limits, drives and collision
-filters through impulse constraints; articulation islands request additional
-solver iterations without changing the host world's settings. This reproduces
-the supported descriptor behavior with Rapier rather than matching PhysX's
-actuator dynamics. `backend.jointSolver` identifies the solver representation. Authored
-collider-local mass, center of mass and inertia contribute to their owning body;
-body-level mass properties retain precedence.
+Unsupported features reject by default; `allowPartial: true` returns diagnostics.
+Simulation and motor targets do not modify authored data. Custom async visual
+bindings must check their abort signal after each await before accessing bodies.
