@@ -148,12 +148,12 @@ test('a pending asset stays inactive while the host continues stepping existing 
 });
 
 test('strict unsupported assets reject before reading or copying collision buffers',async()=>{
- const source=fixture();let reads=0;source.shapes[0].type='mesh';source.shapes[0].approximation='sdf';
+ const source=fixture();let reads=0;source.shapes[0].type='mesh';source.shapes[0].approximation='unknownFutureApproximation';
  Object.defineProperty(source.shapes[0],'points',{enumerable:true,get(){reads++;return new Float32Array(12);}});
  const host=createSimulationWorld({rapier:R});
  try{
-  await assert.rejects(host.addAsset({snapshot:source}),/sdf/);assert.equal(reads,0);assert.equal(host.world.bodies.len(),0);
-  await assert.rejects(createSimulation({snapshot:source,rapier:R}),/sdf/);assert.equal(reads,0);
+  await assert.rejects(host.addAsset({snapshot:source}),/unknownFutureApproximation/);assert.equal(reads,0);assert.equal(host.world.bodies.len(),0);
+  await assert.rejects(createSimulation({snapshot:source,rapier:R}),/unknownFutureApproximation/);assert.equal(reads,0);
  }finally{host.dispose();}
 });
 

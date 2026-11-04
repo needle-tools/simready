@@ -40,6 +40,7 @@ export function bindVisuals({root, bodies, bindings, worldSpace = false}) {
         for (const object of changed) {object.instanceMatrix.needsUpdate = true; object.computeBoundingSphere(); if (object.boundingBox) object.computeBoundingBox();}
     }
     return {
+        root, bindings: bindings.map(binding => ({...binding})),
         sync: () => update(), reset: () => update(true),
         bodyForObject(object, instanceIndex) {
             for (let current = object; current; current = current.parent) {

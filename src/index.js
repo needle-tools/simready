@@ -11,7 +11,7 @@ export const SIMREADY_EXTENSION = 'NEEDLE_simready';
 /** Runtime descriptors retain stage units and explicit body/joint identities. */
 export function validateSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') throw new TypeError('A physics snapshot is required.');
-    for (const key of ['bodies', 'shapes', 'joints', 'materials', 'groups', 'scenes']) {
+    for (const key of ['bodies', 'shapes', 'joints', 'materials', 'groups', 'scenes', ...(snapshot.articulations === undefined ? [] : ['articulations'])]) {
         if (!Array.isArray(snapshot[key])) throw new TypeError('Invalid physics snapshot: ' + key);
         const paths = new Set();
         for (const item of snapshot[key]) {
@@ -25,6 +25,10 @@ export function validateSnapshot(snapshot) {
         }
         if (!Array.from(body.rotation).some(value => value !== 0)) throw new TypeError('Invalid body rotation: ' + body.path);
     }
+    for (const articulation of snapshot.articulations || []) for (const key of ['rootPrims','filteredCollisions','articulatedJoints','articulatedBodies']) {
+        if (!Array.isArray(articulation[key]) || articulation[key].some(path => typeof path !== 'string'))
+            throw new TypeError('Invalid articulation '+key+': '+articulation.path);
+    }
     return snapshot;
 }
 
@@ -36,6 +40,15 @@ export function getSnapshotIssues(snapshot){
     const missing=(item,target,known,label)=>{if(target&&!known.has(target))issues.push({path:item.path,type:item.type,reason:label+' references unavailable '+target});};
     for(const shape of snapshot.shapes||[]){missing(shape,shape.body,bodies,'Collider owner');for(const material of shape.materials||[])missing(shape,material,materials,'Physics material');for(const group of shape.collisionGroups||[])missing(shape,group,groups,'Collision group');}
     for(const joint of snapshot.joints||[]){for(const end of [0,1])missing(joint,joint['body'+end],bodies,'Joint body');if(joint.mimic)missing(joint,joint.mimic.joint,joints,'Mimic joint');}
+    for(const articulation of snapshot.articulations||[]){
+        const item={...articulation,type:'Articulation'},members=new Set(articulation.articulatedBodies);
+        for(const path of articulation.articulatedBodies)missing(item,path,bodies,'Articulation body');
+        for(const path of articulation.articulatedJoints){
+            missing(item,path,joints,'Articulation joint');
+            const joint=snapshot.joints.find(joint=>joint.path===path);
+            if(joint)for(const end of [0,1])missing(item,joint['body'+end],members,'Articulation joint body');
+        }
+    }
     for(const item of [...(snapshot.bodies||[]),...(snapshot.shapes||[])])for(const scene of item.simulationOwners||[])missing(item,scene,scenes,'Simulation owner');
     return issues;
 }

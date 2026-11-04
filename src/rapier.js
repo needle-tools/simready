@@ -13,7 +13,7 @@ const emptyVisualBinding = {sync(){},reset(){},bodyForObject(){return null;}};
 /** Descriptors the Rapier adapter cannot simulate, known before loading its runtime. */
 export function getSimulationLimitations(snapshot) {
     const issues=[...(snapshot.unsupported||[]),...getSnapshotIssues(snapshot)];
-    for(const shape of snapshot.shapes||[])if(shape.collisionEnabled!==false && shape.type==='mesh' && shape.approximation && !['none','convexHull'].includes(shape.approximation))
+    for(const shape of snapshot.shapes||[])if(shape.collisionEnabled!==false && shape.type==='mesh' && shape.approximation && !['none','convexHull','sdf'].includes(shape.approximation))
         issues.push({path:shape.path,type:'mesh',reason:`Mesh approximation ${shape.approximation} is not supported.`});
     for(const joint of snapshot.joints||[])if(joint.mimic)issues.push({path:joint.path,type:joint.type,reason:"Mimic joint coupling is not supported by this contact adapter."});
     return issues;
@@ -48,15 +48,26 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     // or a reduced-coordinate articulation. Its dependent joints still share
     // one constraint solver, including closed loops and fixed attachments.
     const unsupported = initialIssues;
+    const backend = {name:'rapier',jointSolver:'impulse',adaptations:(snapshot.articulations || []).map(articulation => ({
+        path:articulation.path,source:'reduced-coordinate articulation',target:'impulse constraints',
+        reason:'Authored links, joint frames, limits, drives and collision filters are retained in the impulse solver.',
+    }))};
     const warn = (item, reason) => {if(!unsupported.some(issue=>issue.path===item.path&&issue.reason===reason))unsupported.push({ path: item.path, type: item.type, reason });};
     const inScene = item => item.simulationOwners?.length ? !!scene && item.simulationOwners.includes(scene.path)
         : !scene || scene.path === scenes[0]?.path;
     let playing = false, disposed = false, accumulator = 0, drag = null;
     const ownedBodies = new Set(), ownedColliders = new Set(), ownedJoints = new Set();
     const bindingAbort = new AbortController();
-    let visuals, unregister, unregisterResources, released = false;
+    let visuals, unregister, unregisterResources, released = false, visualsDisposed = false;
     const release = () => {
-        if (released) return;
+        // A pending binding can resolve after host disposal. Its registration
+        // cleanup still runs, without touching the already released world.
+        let cleanupError;
+        if (visuals && !visualsDisposed) {
+            visualsDisposed = true;
+            try { visuals.dispose?.(); } catch (error) { cleanupError = error; }
+        }
+        if (released) { if (cleanupError) throw cleanupError; return; }
         released = true; disposed = true; playing = false;
         bindingAbort.abort();
         unregister?.();
@@ -67,6 +78,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             for (const body of ownedBodies) if (world.bodies.contains(body.handle)) world.removeRigidBody(body);
             for (const collider of ownedColliders) if (world.colliders.contains(collider.handle)) world.removeCollider(collider, true);
         }
+        if (cleanupError) throw cleanupError;
     };
     unregisterResources = worldContext?.trackResources(() => {try{visuals?.reset();}finally{release();}});
     const makeBody = desc => { const body = world.createRigidBody(desc); ownedBodies.add(body); return body; };
@@ -101,9 +113,17 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                     const points = Float32Array.from(data.points || [], (v, i) => v * (data.meshScale?.[i % 3] ?? 1));
                     if (!points.length) { warn(data, 'Mesh collision points are unavailable.'); continue; }
                     if (data.approximation === 'convexHull') desc = R.ColliderDesc.convexHull(points);
+                    else if (data.approximation === 'sdf') {
+                        if (!R.ColliderDesc.convexDecomposition) {warn(data,'SDF-source mesh collision requires Rapier convex decomposition support.');continue;}
+                        desc = R.ColliderDesc.convexDecomposition(points,Uint32Array.from(data.indices || []),
+                            {resolution:64,concavity:.001,maxConvexHulls:128},R.CompoundFlags.FIX_INTERNAL_EDGES);
+                        backend.adaptations.push({path:data.path,source:'sdf',target:'convex decomposition',
+                            reason:'The authored collision surface is represented by a concave compound of convex parts.'});
+                    }
                     else if (!data.approximation || data.approximation === 'none') {
-                        if (owner?.body.isDynamic()) { warn(data, 'Dynamic triangle meshes require an authored convex approximation.'); continue; }
-                        desc = R.ColliderDesc.trimesh(points, Uint32Array.from(data.indices || []));
+                        // Preserve authored concave surfaces. A single convex
+                        // hull would seal drawers and cavities.
+                        desc = R.ColliderDesc.trimesh(points, Uint32Array.from(data.indices || []), R.TriMeshFlags.FIX_INTERNAL_EDGES_TWO_SIDED);
                     } else { warn(data, `Mesh approximation ${data.approximation} is not supported.`); continue; }
                     break;
                 }
@@ -112,15 +132,32 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             if (!desc) { warn(data, 'Collider could not be constructed.'); continue; }
             if (['capsule', 'cylinder', 'cone'].includes(data.type)) extraRotation.setFromUnitVectors(new Vector3(0, 1, 0), axis(data.axis));
             const r = q(data.rotation).multiply(extraRotation);
-            desc.setTranslation(...(data.position || [0, 0, 0])).setRotation(r);
             const material = data.materials?.map(path => materialMap.get(path)).find(Boolean);
             desc.setFriction(material?.dynamicFriction ?? 0.5).setRestitution(material?.restitution ?? 0);
             const density = data.density > 0 ? data.density : owner?.data.density > 0 ? owner.data.density : material?.density;
             desc.setDensity(density > 0 ? density * kgpu : 1000 * mpu ** 3);
             if (data.mass > 0) desc.setMass(data.mass * kgpu);
             if (data.path !== owner?.data.path && (data.centerOfMass || data.diagonalInertia || data.principalAxes)) {
-                warn(data, 'Collider-local center of mass and inertia overrides are not supported.');
+                // Probe the shape in its own frame to fill unauthored moments.
+                // The temporary body never participates in a simulation step.
+                const complete = data.mass > 0 && data.centerOfMass && data.diagonalInertia;
+                const probe = complete ? null : makeBody(R.RigidBodyDesc.dynamic());
+                try {
+                    if (probe) {world.createCollider(desc, probe);probe.recomputeMassPropertiesFromColliders();}
+                    const mass = complete ? data.mass * kgpu : probe.mass(), inverseShape = extraRotation.clone().invert();
+                    const center = data.centerOfMass
+                        ? new Vector3().fromArray(data.centerOfMass).multiply(new Vector3().fromArray(data.scale || [1,1,1])).applyQuaternion(inverseShape)
+                        : probe.localCom();
+                    let inertia = data.diagonalInertia ? new Vector3().fromArray(data.diagonalInertia).multiplyScalar(kgpu) : probe.principalInertia();
+                    let frame = data.principalAxes || data.diagonalInertia ? inverseShape.multiply(q(data.principalAxes)) : probe.principalInertiaLocalFrame();
+                    if (data.centerOfMass && !data.diagonalInertia) {
+                        const shifted = shiftInertiaToCenterOfMass(inertia,frame,mass,probe.localCom(),center);
+                        inertia = shifted.diagonalInertia;frame = shifted.principalAxes;
+                    }
+                    desc.setMassProperties(mass,center,inertia,frame);
+                } finally { if (probe) {world.removeRigidBody(probe); ownedBodies.delete(probe);} }
             }
+            desc.setTranslation(...(data.position || [0, 0, 0])).setRotation(r);
             desc.setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS);
             const collider = world.createCollider(desc, owner?.body); ownedColliders.add(collider);
             colliders.set(collider.handle, { data, collider, owner });
@@ -200,8 +237,13 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         const groupAliases = new Map();
         for (const group of snapshot.groups || []) for (const path of [group.path, ...(group.mergedGroups || [])]) groupAliases.set(path, group.path);
         const canonicalGroup = path => groupAliases.get(path) || path;
-        const excludes = (a, b) => (a.data.filteredCollisions || []).some(p => contains(p, b.data.path) || p === b.data.body)
-            || (a.owner?.data.filteredCollisions || []).some(p => contains(p, b.data.path) || p === b.data.body);
+        const articulations = snapshot.articulations || [];
+        const articulationByPath = new Map(articulations.map(item => [item.path,item]));
+        const matches = (path, collider) => contains(path,collider.data.path) || path === collider.data.body
+            || articulationByPath.get(path)?.articulatedBodies.includes(collider.data.body);
+        const excludes = (a, b) => (a.data.filteredCollisions || []).some(p => matches(p,b))
+            || (a.owner?.data.filteredCollisions || []).some(p => matches(p,b))
+            || articulations.some(item => item.articulatedBodies.includes(a.data.body) && item.filteredCollisions.some(p => matches(p,b)));
         const groupExcludes = (a, b) => (a.data.collisionGroups || []).some(path => {
             const g = groupMap.get(canonicalGroup(path));
             if (!g) return false;
@@ -219,7 +261,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         if(!allowPartial && unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}${unsupported.length>1?` (${unsupported.length} unsupported features)`:''}`);
         // Pending visual setup must not expose an unregistered physical asset.
         if(worldContext){for(const body of ownedBodies)body.setEnabled(false);for(const collider of ownedColliders)collider.setEnabled(false);}
-        visuals = await bindVisuals?.(bodies, warn, bindingAbort.signal) || emptyVisualBinding;
+        visuals = await bindVisuals?.(bodies, warn, bindingAbort.signal, colliders) || emptyVisualBinding;
         if(!allowPartial&&unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}`);
         if (worldContext?.isDisposed()) throw new Error('Simulation world is disposed.');
         const sync=visuals.sync;
@@ -245,7 +287,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             visuals.reset();
         }
         return {
-            world, bodies, joints, unsupported,
+            world, bodies, colliders, joints, unsupported, backend,
             play() { if (!disposed) { playing = true; } },
             pause() { playing = false; endDrag(); },
             isPlaying: () => playing,

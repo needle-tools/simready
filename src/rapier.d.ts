@@ -2,11 +2,14 @@ import type {BodyPose} from './kinematics.js';
 export type RapierModule={World:new(...args:never[])=>object};
 export type WorldOf<R extends RapierModule>=InstanceType<R['World']>;
 export type BodyOf<R extends RapierModule>=WorldOf<R> extends {createRigidBody(desc:never):infer B}?B:BodyPose;
-import type {PhysicsSnapshot,PhysicsBody,PhysicsIssue,PhysicsVector,PhysicsRotation} from './index.js';
-export interface VisualBinding {sync():void;reset():void;bodyForObject(object:unknown,instanceIndex?:number):unknown}
-export type SimulationBodies<B=BodyPose>=Map<string,{data:PhysicsBody;body:B;colliders:object[]}>;
+import type {PhysicsSnapshot,PhysicsBody,PhysicsShape,PhysicsIssue,PhysicsVector,PhysicsRotation} from './index.js';
+export interface VisualBinding {sync():void;reset():void;dispose?():void;bodyForObject(object:unknown,instanceIndex?:number):unknown;root?:import('three').Object3D;bindings?:import('./three.js').ObjectBinding[]}
+export type SimulationBodyRecord<B=BodyPose>={data:PhysicsBody;body:B;colliders:object[]};
+export type SimulationBodies<B=BodyPose>=Map<string,SimulationBodyRecord<B>>;
+export type SimulationColliders<B=BodyPose>=Map<number,{data:PhysicsShape;collider:object;owner?:SimulationBodyRecord<B>}>;
 export interface Simulation<W=object,B=BodyPose> {
- readonly world:W;readonly bodies:SimulationBodies<B>;readonly joints:Map<string,object>;readonly unsupported:PhysicsIssue[];
+ readonly backend:{name:'rapier';jointSolver:'impulse';adaptations:Array<{path:string;source:string;target:string;reason:string}>};
+ readonly world:W;readonly bodies:SimulationBodies<B>;readonly colliders:SimulationColliders<B>;readonly joints:Map<string,object>;readonly unsupported:PhysicsIssue[];
  play():void;pause():void;isPlaying():boolean;update(dt:number):void;
  /** Advance exactly dt; independent of playback. Shared assets are stepped by their world. */
  step(dt?:number):void;
@@ -19,7 +22,7 @@ export interface Simulation<W=object,B=BodyPose> {
 export interface SimulationOptions {
  snapshot:PhysicsSnapshot;rapier:RapierModule;scenePath?:string;allowPartial?:boolean;mode?:'simulation'|'interaction';
  /** Async bindings must check signal after each await before accessing bodies. */
- bindVisuals?:(bodies:SimulationBodies,warn:(item:{path:string;type?:string},reason:string)=>void,signal:AbortSignal)=>VisualBinding|Promise<VisualBinding>;
+ bindVisuals?:(bodies:SimulationBodies,warn:(item:{path:string;type?:string},reason:string)=>void,signal:AbortSignal,colliders:SimulationColliders)=>VisualBinding|Promise<VisualBinding>;
 }
 export interface WorldAssetOptions extends Omit<SimulationOptions,'rapier'> {id?:string;position?:PhysicsVector;rotation?:PhysicsRotation}
 export interface SimulationAsset<W=object,B=BodyPose> extends Simulation<W,B> {readonly id:string;readonly snapshot:PhysicsSnapshot}

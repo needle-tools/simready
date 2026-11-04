@@ -26,13 +26,18 @@ export type PhysicsDrive = {
 export type PhysicsJoint = {
     path: string; type: string; body0: string; body1: string;
     position0: PhysicsVector; position1: PhysicsVector; rotation0: PhysicsRotation; rotation1: PhysicsRotation;
-    jointEnabled: boolean; collisionEnabled: boolean; axis?: 'X' | 'Y' | 'Z';
+    jointEnabled: boolean; collisionEnabled: boolean; excludeFromArticulation?:boolean; axis?: 'X' | 'Y' | 'Z';
     limit?: PhysicsLimit; drive?: PhysicsDrive; minEnabled?: boolean; maxEnabled?: boolean;
     breakForce: number | null; breakTorque: number | null;
     /** Optional kinematic coupling: value = multiplier * reference value + offset. */
     mimic?: {joint:string;multiplier:number;offset:number};
 };
+export type PhysicsArticulation = {
+    path:string;rootPrims:string[];filteredCollisions:string[];
+    articulatedJoints:string[];articulatedBodies:string[];
+};
 export type PhysicsSnapshot = {
+    articulations?:PhysicsArticulation[];
     metersPerUnit: number; kilogramsPerUnit: number; upAxis: string;
     scenes: { path: string; gravityDirection: PhysicsVector; gravityMagnitude: number }[];
     bodies: PhysicsBody[]; shapes: PhysicsShape[]; joints: PhysicsJoint[];

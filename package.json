@@ -32,16 +32,25 @@
       "types": "./src/gltf.d.ts",
       "import": "./src/gltf.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./needle": {
+      "types": "./src/needle.d.ts",
+      "import": "./src/needle.js"
+    }
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "test:packed-consumer": "node scripts/test-packed-consumer.mjs"
   },
   "peerDependencies": {
-    "three": ">=0.160.0"
+    "three": ">=0.160.0",
+    "@needle-tools/engine": ">=6.0.0-alpha.7"
   },
-  "peerDependenciesMeta": {},
+  "peerDependenciesMeta": {
+    "@needle-tools/engine": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "three": "^0.185.1",
     "@dimforge/rapier3d-compat": "0.21.0",

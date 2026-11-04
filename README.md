@@ -95,22 +95,14 @@ This preserves Needle's other glTF import plugins and keeps SimReady registratio
 separate from the USD plugin. Loading an asset or creating a mechanism does not
 initialize Rapier.
 
-For dynamics instead of joint posing, reuse the Engine's Rapier module and
-world. This requires an Engine version with `RapierPhysics.registerWorldExtension`.
-The same setup works when
-physics is already running and when the Engine has not initialized it yet:
+For dynamics instead of joint posing, use the Needle adapter. It initializes
+Needle's physics backend when needed and registers imported bodies and colliders
+through Engine's `registerExternalPhysics` API:
 
 ```js
-import {NEEDLE_ENGINE_MODULES} from '@needle-tools/engine';
-import {createSimulationWorld} from '@needle-tools/simready/rapier';
+import {createNeedleSimulationWorld} from '@needle-tools/simready/needle';
 
-const physics = context.physics.getOrCreatePhysicsEngine();
-await physics.initialize();
-const world = createSimulationWorld({
-  rapier: NEEDLE_ENGINE_MODULES.RAPIER_PHYSICS.MODULE,
-  world: physics.world,
-  registerWorldExtension: extension => physics.registerWorldExtension(extension),
-});
+const world = await createNeedleSimulationWorld({context});
 const assembly = await runtime.createSimulation({world, id: 'assembly', position: [0, 0, 0], rotation: [0, 0, 0, 1]});
 ```
 
@@ -119,6 +111,15 @@ loop. Do not call `world.step()` or `assembly.update()` to advance this borrowed
 world. Keep the adapter on the owning component for as long as those assets are
 in use. Engine world teardown also disposes registered adapters before freeing
 the solver.
+
+Engine owns component identity, queries, collision callbacks and lifecycle for
+these imported physics objects. The package supplies raw Rapier objects and
+visual identities; it does not construct Engine components. `assembly.rigidbodies`
+maps authored body paths to the Engine representations, and
+`assembly.colliderComponents` maps Rapier collider handles to theirs. Instanced
+or ambiguous visual bindings receive independent Engine objects. Reset keeps
+those identities; unloading releases the registration before the imported raw
+objects. Standalone Rapier and kinematics imports remain independent of Engine.
 
 Explicitly disabling the Engine Rapier backend also disables this dynamics path; the adapter does not load a second runtime to override that choice.
 
@@ -237,7 +238,7 @@ When another host already has a Rapier world, borrow that exact world and its
 module. The adapter adds and removes only its own bodies; it preserves gravity,
 solver settings and the host's event queue. It cannot step a borrowed world.
 
-Other hosts can pass `world` without a registration callback, compose `world.hooks` with their existing contact filters, and call `world.sync()` after their own physics step. They must call the adapter's `dispose()` before freeing the borrowed Rapier world. Registration automates that lifecycle; it never replaces or patches the host's methods. Custom asynchronous `bindVisuals(bodies, warn, signal)` callbacks must call `signal.throwIfAborted()` after each await before accessing a physics body; disposal aborts pending bindings before releasing the bodies.
+Other hosts can pass `world` without a registration callback, compose `world.hooks` with their existing contact filters, and call `world.sync()` after their own physics step. They must call the adapter's `dispose()` before freeing the borrowed Rapier world. Registration automates that lifecycle; it never replaces or patches the host's methods. Custom asynchronous `bindVisuals(bodies, warn, signal, colliders)` callbacks must call `signal.throwIfAborted()` after each await before accessing a physics body; disposal aborts pending bindings before releasing the bodies.
 
 `addAsset` converts stage units and up axes into the world's Y-up coordinates. World units default to metres and kilograms. Placement uses explicit `position` and quaternion `rotation` in world coordinates, defaulting to the world origin and identity. Supply the intended placement when attaching an already positioned render asset; attachment replaces its root transform until disposal. Each asset retains its own path namespace, so repeated imports can share original body and joint paths. The glTF integration places render geometry into the same frame and restores it when detached. The host owns the surrounding scene and its resources.
 
@@ -251,3 +252,19 @@ Simulation never writes authored data. Motor targets are transient controls; `re
 The data entrypoint exports `createSimreadyExtension`, `encodeMetadata` and `validateSnapshot` without importing Three or a solver. `/three` supplies explicit object/instance bindings and joint helpers; `/gltf` provides the opt-in loader; `/kinematics` and `/rapier` provide controllers. USD extraction and USD-to-glTF conversion remain in `@needle-tools/usd`.
 
 The versioned `NEEDLE_simready` contract retains resolved physics and semantic metadata. It describes the composed configuration; USD layers and alternate variant contents remain part of the source document. Render geometry and collision meshes use ordinary glTF storage.
+
+Custom visual bindings can expose `root` and `bindings` (the explicit object/body
+identities) for host registration. The `@needle-tools/simready/three` helper
+already exposes them. The fourth binding argument contains every collider,
+including shapes without a rigid body. An optional `dispose()` releases host
+registrations before physics resources are freed; `reset()` only restores poses.
+
+The Rapier adapter uses authored triangle surfaces for triangle meshes and cooks
+SDF-labelled source meshes into concave compounds through convex decomposition.
+Cavities remain open for interaction. These are Rapier compound contacts rather
+than PhysX SDF grid evaluation. `simulation.backend.adaptations` records that
+conversion and any articulation solved through impulse constraints. Articulation
+membership, authored joint frames, limits, drives and collision filters remain
+intact; `backend.jointSolver` identifies the solver representation. Authored
+collider-local mass, center of mass and inertia contribute to their owning body;
+body-level mass properties retain precedence.
