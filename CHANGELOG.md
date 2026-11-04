@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Pause individual assets in shared physics worlds while preserving their poses, contacts and joints; resume their saved motion independently of other assets.
+
 - Preserve articulation collision filtering and stabilize fixed links between bodies with very different masses while retaining joint limits and drives.
 
 - Simulate concave collision meshes, including SDF-labelled source meshes, while preserving cavities and authored collider mass properties.

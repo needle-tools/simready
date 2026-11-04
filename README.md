@@ -245,7 +245,9 @@ Other hosts can pass `world` without a registration callback, compose `world.hoo
 Mechanism sliders use source stage units. In a shared simulation, slider values
 and motor targets use world units; hinge values remain degrees.
 
-`step(dt)` advances exactly the requested positive duration, independent of playback. For an individual stage-coordinate simulation, `createSimulation({snapshot, rapier})` also provides the legacy playback accumulator through `play`, `pause` and `update`. Use the owning world's `step` for shared assets. Reset and disposal affect only the corresponding asset.
+`step(dt)` advances exactly the requested positive duration. Newly attached assets participate in shared-world steps immediately. Calling an asset's `pause()` holds its current physical pose, retaining colliders and joints while other assets continue moving and contacting it. `play()` resumes its saved body types, velocities and sleep/enabled state. `reset()` restores the authored pose and holds it until playback resumes. These controls affect only the corresponding asset. `isPlaying()` reports playback-control intent and initially returns `false`, including for newly attached assets.
+
+For an individual stage-coordinate simulation, `createSimulation({snapshot, rapier})` provides the playback accumulator through `play`, `pause` and `update`. Its explicit `step(dt)` manually advances even while paused, then holds the resulting pose. Use the owning world's `step` for shared assets; it respects each asset's explicit pause. Disposal removes only that asset's resources.
 
 Simulation never writes authored data. Motor targets are transient controls; `reset` restores authored settings. Kinematic posing and force-driven simulation are separate controllers. Dynamics rejects unsupported features by default and returns diagnostics when `allowPartial: true` is explicitly requested. USD's published compatibility wrappers retain their previous defaults.
 

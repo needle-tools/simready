@@ -55,7 +55,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     const warn = (item, reason) => {if(!unsupported.some(issue=>issue.path===item.path&&issue.reason===reason))unsupported.push({ path: item.path, type: item.type, reason });};
     const inScene = item => item.simulationOwners?.length ? !!scene && item.simulationOwners.includes(scene.path)
         : !scene || scene.path === scenes[0]?.path;
-    let playing = false, disposed = false, accumulator = 0, drag = null;
+    let playing = false, disposed = false, accumulator = 0, drag = null, pausedBodies = null;
     const ownedBodies = new Set(), ownedColliders = new Set(), ownedJoints = new Set(), ownedMultibodyJoints = new Set();
     const bindingAbort = new AbortController();
     let visuals, unregister, unregisterResources, released = false, visualsDisposed = false;
@@ -68,7 +68,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             try { visuals.dispose?.(); } catch (error) { cleanupError = error; }
         }
         if (released) { if (cleanupError) throw cleanupError; return; }
-        released = true; disposed = true; playing = false;
+        released = true; disposed = true; playing = false; pausedBodies = null;
         bindingAbort.abort();
         unregister?.();
         unregisterResources?.();
@@ -217,13 +217,25 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 warn(data, 'Joint breaking thresholds are not supported.');
             }
             const root0=fixedRoot(b0.handle),root1=fixedRoot(b1.handle);
-            const reducedFixed = data.type === 'fixed' && articulatedJoints.has(data.path) && !data.excludeFromArticulation && root0 !== root1;
+            const reducedFixed = data.type === 'fixed' && articulatedJoints.has(data.path) && !data.excludeFromArticulation && root0 !== root1
+                && (root0 === b0.handle || root1 === b1.handle);
             let joint;
             if (reducedFixed) {
-                joint = world.createMultibodyJoint(desc,b0,b1,true);
-                ownedMultibodyJoints.add(joint);fixedParents.set(root1,root0);
+                // Rapier can attach a child tree only through its root. Joining
+                // two internal links stays an impulse constraint; reverse a
+                // root-to-internal edge to retain the valid reduced-coordinate tree.
+                const reverse = root1 !== b1.handle;
+                joint = reverse ? world.createMultibodyJoint(R.JointData.fixed(a1,r1,a0,r0),b1,b0,true)
+                    : world.createMultibodyJoint(desc,b0,b1,true);
+                ownedMultibodyJoints.add(joint);fixedParents.set(reverse?root0:root1,reverse?root1:root0);
                 backend.jointSolver='hybrid';
-            } else joint = makeJoint(desc, b0, b1);
+            } else {
+                joint = makeJoint(desc, b0, b1);
+                if (data.type === 'fixed' && articulatedJoints.has(data.path) && !data.excludeFromArticulation)
+                    backend.adaptations.push({path:data.path,source:'reduced-coordinate fixed link',target:'fixed impulse constraint',
+                        reason:root0 === root1 ? 'The fixed constraint closes a reduced-coordinate loop.'
+                            : 'The fixed constraint connects internal links of two reduced-coordinate trees.'});
+            }
             if ((data.type === 'revolute' || data.type === 'prismatic') && joint.setLocalFrame1) {
                 // Rapier unit joints use X in their local frame. Rotate that
                 // basis into USD's authored axis, then apply each local frame.
@@ -292,9 +304,35 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             for(const {body,type} of drag.pinned){body.setBodyType(type,true);body.setLinvel(vector(),true);body.setAngvel(vector(),true);}
             drag = null;
         }
+        function resumeBodies() {
+            if (!pausedBodies) return;
+            const states = pausedBodies; pausedBodies = null;
+            for (const [body,state] of states) body.setBodyType(state.type,false);
+            for (const [body,state] of states) {
+                body.setLinvel(state.linear,false); body.setAngvel(state.angular,false);
+                body.setNextKinematicTranslation(state.nextPosition); body.setNextKinematicRotation(state.nextRotation);
+                body.setEnabled(state.enabled);
+                if (state.sleeping) body.sleep(); else body.wakeUp();
+            }
+        }
+        function pauseBodies() {
+            if (pausedBodies || disposed) return;
+            pausedBodies = new Map([...ownedBodies].map(body => [body, {
+                type:body.bodyType(),linear:body.linvel(),angular:body.angvel(),
+                nextPosition:body.nextTranslation(),nextRotation:body.nextRotation(),
+                enabled:body.isEnabled(),sleeping:body.isSleeping(),
+            }]));
+            // Rapier requires reduced-coordinate descendants to remain dynamic.
+            // Freezing each fixed chain's root holds the complete rigid cluster
+            // while retaining its colliders and both kinds of joint handles.
+            for (const body of ownedBodies) {
+                if (fixedRoot(body.handle) === body.handle) body.setBodyType(R.RigidBodyType.Fixed,false);
+                body.setLinvel(vector(),false); body.setAngvel(vector(),false);
+            }
+        }
         function reset() {
             if (disposed) return;
-            endDrag(); playing = false; accumulator = 0;
+            endDrag(); resumeBodies(); playing = false; accumulator = 0;
             for (const { body, data } of bodies.values()) {
                 body.setTranslation(vector(data.position), true); body.setRotation(rotation(data.rotation), true);
                 body.setLinvel(vector(data.linearVelocity), true);
@@ -303,12 +341,13 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 if (data.startsAsleep) body.sleep();
             }
             for(const [path,record] of controls)if(record.data.drive?.enabled&&joints.get(path).configureMotor){record.drive={...record.data.drive};const unit=record.data.type==='revolute'?Math.PI/180:1,gain=(record.drive.acceleration?1:kgpu)/unit;joints.get(path).configureMotor(record.drive.targetPosition*unit,record.drive.targetVelocity*unit,record.drive.stiffness*gain,record.drive.damping*gain);}
+            pauseBodies();
             visuals.reset();
         }
         return {
             world, bodies, colliders, joints, unsupported, backend,
-            play() { if (!disposed) { playing = true; } },
-            pause() { playing = false; endDrag(); },
+            play() { if (!disposed) { resumeBodies(); playing = true; } },
+            pause() { if (disposed) return; playing = false; endDrag(); pauseBodies(); },
             isPlaying: () => playing,
             update(dt) {
                 if (!playing || disposed || !ownsWorld) return;
@@ -320,7 +359,10 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 if (disposed) throw new Error('Simulation is disposed.');
                 if (!ownsWorld) throw new Error('Step the owning simulation world.');
                 if (!Number.isFinite(dt) || dt <= 0) throw new RangeError('Step duration must be positive and finite.');
-                world.timestep = dt; world.step(events, hooks); sync();
+                const held = !!pausedBodies;
+                if (held) resumeBodies();
+                try { world.timestep = dt; world.step(events, hooks); sync(); }
+                finally { if (held) pauseBodies(); }
             },
             reset,
             getJointValue(path) {const record=controls.get(path);return !disposed&&record?jointValue(record.data,bodies):null;},
