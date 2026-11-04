@@ -4,7 +4,8 @@ import {helperGeometry,disposeHelper} from './helperGeometry.js';
 
 /** Joint axes, stops and angular limits in USD stage coordinates. */
 /** @param {import('../kinematics.js').Mechanism & {root:import('three').Object3D}} mechanism
- * @param {{visible?:(path:string,body:string)=>boolean,selected?:(path:string,body:string)=>boolean}} [options] */
+ * @param {{visible?:(path:string,body:string)=>boolean,selected?:(path:string,body:string)=>boolean}} [options]
+ * @returns {{objects:import('three').LineSegments<BufferGeometry,import('three').LineBasicMaterial>[],update():void,dispose():void}} */
 export function createJointHelpers(mechanism,{visible=()=>true,selected=()=>false}={}){
  /** @type {Array<{record:import('../kinematics.js').JointRecord,object:import('three').LineSegments<BufferGeometry,import('three').LineBasicMaterial>,markers:import('three').Points<BufferGeometry,import('three').PointsMaterial>}>} */
  const objects=[];
