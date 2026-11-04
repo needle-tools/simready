@@ -4,7 +4,7 @@
   "description": "SimReady mechanisms, simulation and glTF integration for browser and headless applications",
   "type": "module",
   "sideEffects": false,
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "files": [
     "src",
     "README.md",
