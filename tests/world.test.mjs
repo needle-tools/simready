@@ -156,3 +156,77 @@ test('strict unsupported assets reject before reading or copying collision buffe
   await assert.rejects(createSimulation({snapshot:source,rapier:R}),/sdf/);assert.equal(reads,0);
  }finally{host.dispose();}
 });
+
+test('borrows an existing world without owning its settings, events or stepping',async()=>{
+ const world=new R.World({x:0,y:-9.81,z:0}),events=new R.EventQueue(false);
+ world.timestep=1/60;world.lengthUnit=2;world.numSolverIterations=7;const timestep=world.timestep;
+ const ground=world.createCollider(R.ColliderDesc.cuboid(10,.5,10).setTranslation(0,-.5,0).setActiveEvents(R.ActiveEvents.COLLISION_EVENTS));
+ let extension,detached=0,synced=0;
+ const host=createSimulationWorld({rapier:R,world,registerWorldExtension:value=>{extension=value;return()=>detached++;}});
+ try{
+  assert.equal(host.world,world);assert.equal(host.ownsWorld,false);
+  assert.equal(world.timestep,timestep);assert.equal(world.lengthUnit,2);assert.equal(world.numSolverIterations,7);
+  const asset=await host.addAsset({snapshot:fixture(),bindVisuals:()=>({sync(){synced++;},reset(){},bodyForObject(){return null;}})});
+  assert.throws(()=>host.step(),/host owns stepping/);
+  for(let i=0;i<240;i++){world.step(events,extension.hooks);extension.afterStep();}
+  assert.ok(Math.abs(asset.bodies.get('/Body').body.translation().y-.5)<.03);
+  assert.equal(synced,240);
+  let contacts=0;events.drainCollisionEvents(()=>contacts++);assert.ok(contacts>0);
+  host.dispose();assert.equal(detached,1);assert.equal(world.bodies.len(),0);assert.equal(ground.isValid(),true);
+  world.step(events);assert.equal(world.colliders.len(),1);
+ }finally{host.dispose();events.free();world.free();}
+});
+
+test('host disposal cancels pending attachment before the external world is freed',async()=>{
+ const world=new R.World({x:0,y:0,z:0});let extension,finish,resets=0;
+ const host=createSimulationWorld({rapier:R,world,registerWorldExtension:value=>{extension=value;return()=>{};}});
+ const pending=host.addAsset({snapshot:fixture(),bindVisuals:()=>new Promise(resolve=>{finish=()=>resolve({sync(){},reset(){resets++;},bodyForObject(){return null;}});})});
+ assert.equal(world.bodies.len(),2);
+ extension.dispose();assert.equal(world.bodies.len(),0);world.free();
+ finish();await assert.rejects(pending,/disposed/);assert.equal(resets,1);assert.equal(host.assets.size,0);
+});
+
+test('explicit external hooks retain asset-local filtering and remain composable with host hooks',async()=>{
+ const world=new R.World({x:0,y:0,z:0}),events=new R.EventQueue(false);
+ const host=createSimulationWorld({rapier:R,world});
+ try{
+  const source=fixture();source.bodies.push({...source.bodies[0],path:'/Other'});
+  source.shapes.push({...source.shapes[0],path:'/Other/Shape',body:'/Other'});
+  source.bodies[0].filteredCollisions=['/Other'];
+  const asset=await host.addAsset({snapshot:source});
+  const a=asset.bodies.get('/Body').colliders[0],b=asset.bodies.get('/Other').colliders[0];
+  assert.equal(host.hooks.filterContactPair(a.handle,b.handle),null);
+  assert.equal(host.hooks.filterContactPair(a.handle,9999),R.SolverFlags.COMPUTE_IMPULSE);
+  world.step(events,host.hooks);host.sync();
+ }finally{host.dispose();events.free();world.free();}
+});
+
+test('pending visual callbacks receive cancellation before the host frees their bodies',async()=>{
+ const world=new R.World({x:0,y:0,z:0});let finish,signal;
+ const host=createSimulationWorld({rapier:R,world});
+ const pending=host.addAsset({snapshot:fixture(),bindVisuals:async(bodies,_warn,abort)=>{
+  signal=abort;await new Promise(resolve=>{finish=resolve;});
+  abort.throwIfAborted();
+  bodies.get('/Body').body.translation();
+  return {sync(){},reset(){},bodyForObject(){return null;}};
+ }});
+ host.dispose();assert.equal(signal.aborted,true);world.free();finish();
+ await assert.rejects(pending,{name:'AbortError'});
+});
+
+test('teardown between binding completion and asset registration releases resources before host free',async()=>{
+ const world=new R.World({x:0,y:0,z:0});let resets=0;
+ const host=createSimulationWorld({rapier:R,world});
+ const pending=host.addAsset({snapshot:fixture(),bindVisuals:()=>({sync(){},reset(){resets++;},bodyForObject(){return null;}})});
+ queueMicrotask(()=>{host.dispose();assert.equal(world.bodies.len(),0);world.free();});
+ await assert.rejects(pending,/disposed/);assert.equal(resets,1);assert.equal(host.assets.size,0);
+});
+
+
+test('disposed controller queries do not read released bodies or visual bindings',async()=>{
+ const host=createSimulationWorld({rapier:R});
+ const source=fixture();source.joints=[{path:'/Slide',type:'prismatic',axis:'X',body0:'',body1:'/Body',position0:[0,3,0],position1:[0,0,0],rotation0:q,rotation1:q}];
+ const asset=await host.addAsset({snapshot:source,bindVisuals:()=>({sync(){},reset(){},bodyForObject(){throw new Error('stale binding');}})});
+ host.dispose();
+ assert.equal(asset.getJointValue('/Slide'),null);assert.equal(asset.bodyForObject({}),null);assert.equal(asset.beginDrag('/Body',{x:0,y:3,z:0}),false);
+});

@@ -38,7 +38,20 @@ export async function probe(){
   const height=b.bodies.get('/Body').body.translation().y;
   check(Math.abs(height-1.5)<.05,'cross-asset contacts failed');a.dispose();
   for(let i=0;i<240;i++)host.step();check(Math.abs(b.bodies.get('/Body').body.translation().y-.5)<.04,'asset disposal broke the world');
-  return {height,assets:host.assets.size,usdHandle:!!runtime.handle};
+  const external=new R.World({x:0,y:-9.81,z:0}),events=new R.EventQueue(false);
+  const ground=external.createCollider(R.ColliderDesc.cuboid(10,.5,10).setTranslation(0,-.5,0));
+  let extension,detached=0;
+  const borrowed=createSimulationWorld({rapier:R,world:external,registerWorldExtension:value=>{extension=value;return()=>detached++;}});
+  let borrowedHeight;
+  try{
+   const imported=await borrowed.addAsset({snapshot});
+   for(let i=0;i<240;i++){external.step(events,extension.hooks);extension.afterStep();}
+   borrowedHeight=imported.bodies.get('/Body').body.translation().y;
+   check(Math.abs(borrowedHeight-.5)<.05,'borrowed world contacts failed');
+   extension.dispose();check(ground.isValid()&&detached===1,'borrowed world lifetime failed');
+   external.step(events);
+  }finally{borrowed.dispose();events.free();external.free();}
+  return {height,borrowedHeight,assets:host.assets.size,usdHandle:!!runtime.handle};
  }finally{host.dispose();}
 }
 `;
@@ -50,6 +63,11 @@ import {createSimulationWorld} from '@needle-tools/simready/rapier';
 import {registerSimreadyLoader} from '@needle-tools/simready/gltf';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const host=createSimulationWorld({rapier:R});host.world.timestep=1/120;
+const external=new R.World({x:0,y:-9.81,z:0});
+const borrowed=createSimulationWorld({rapier:R,world:external,registerWorldExtension:extension=>{
+ const hooks:import('@dimforge/rapier3d-compat').PhysicsHooks=extension.hooks;void hooks;return()=>{};
+}});
+borrowed.sync();borrowed.dispose();external.free();
 const loader=registerSimreadyLoader(new GLTFLoader());void loader;host.dispose();
 `);
 run(root,'npx',['--no-install','tsc','--noEmit','--strict','--skipLibCheck','false','--module','NodeNext','--moduleResolution','NodeNext','--target','ES2022','--lib','ES2022,DOM,ESNext.Disposable','consumer.ts']);

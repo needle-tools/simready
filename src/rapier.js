@@ -41,7 +41,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
     const ownsWorld = !worldContext;
     const world = worldContext?.world || new R.World(mode === 'interaction' ? {x:0,y:0,z:0} : gravity);
     // Rapier dispatches contact hooks only through stepWithEvents.
-    const events = worldContext?.events || new R.EventQueue(true);
+    const events = ownsWorld ? new R.EventQueue(true) : worldContext.events;
     if (ownsWorld) { world.timestep = 1 / 120; world.lengthUnit = 1 / mpu; world.numSolverIterations = 12; }
     const bodies = new Map(), colliders = new Map(), joints = new Map(), controls = new Map();
     // Joint inspection does not solve contacts or require PhysX SDF colliders
@@ -53,9 +53,14 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         : !scene || scene.path === scenes[0]?.path;
     let playing = false, disposed = false, accumulator = 0, drag = null;
     const ownedBodies = new Set(), ownedColliders = new Set(), ownedJoints = new Set();
-    let visuals, unregister;
+    const bindingAbort = new AbortController();
+    let visuals, unregister, unregisterResources, released = false;
     const release = () => {
+        if (released) return;
+        released = true; disposed = true; playing = false;
+        bindingAbort.abort();
         unregister?.();
+        unregisterResources?.();
         if (ownsWorld) { try{events.free();}finally{world.free();} }
         else {
             for (const joint of ownedJoints) if (world.impulseJoints.contains(joint.handle)) world.removeImpulseJoint(joint, true);
@@ -63,6 +68,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             for (const collider of ownedColliders) if (world.colliders.contains(collider.handle)) world.removeCollider(collider, true);
         }
     };
+    unregisterResources = worldContext?.trackResources(() => {try{visuals?.reset();}finally{release();}});
     const makeBody = desc => { const body = world.createRigidBody(desc); ownedBodies.add(body); return body; };
     const makeJoint = (desc, a, b) => { const joint = world.createImpulseJoint(desc, a, b, true); ownedJoints.add(joint); return joint; };
 
@@ -213,8 +219,9 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         if(!allowPartial && unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}${unsupported.length>1?` (${unsupported.length} unsupported features)`:''}`);
         // Pending visual setup must not expose an unregistered physical asset.
         if(worldContext){for(const body of ownedBodies)body.setEnabled(false);for(const collider of ownedColliders)collider.setEnabled(false);}
-        visuals = await bindVisuals?.(bodies, warn) || emptyVisualBinding;
+        visuals = await bindVisuals?.(bodies, warn, bindingAbort.signal) || emptyVisualBinding;
         if(!allowPartial&&unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}`);
+        if (worldContext?.isDisposed()) throw new Error('Simulation world is disposed.');
         const sync=visuals.sync;
         unregister = worldContext?.register({hooks, sync});
         if(worldContext){for(const body of ownedBodies)body.setEnabled(true);for(const collider of ownedColliders)collider.setEnabled(true);for(const {body,data}of bodies.values())if(data.startsAsleep)body.sleep();}
@@ -255,7 +262,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 world.timestep = dt; world.step(events, hooks); sync();
             },
             reset,
-            getJointValue(path) {const record=controls.get(path);return record?jointValue(record.data,bodies):null;},
+            getJointValue(path) {const record=controls.get(path);return !disposed&&record?jointValue(record.data,bodies):null;},
             setJointTarget(path,{position,velocity}={}) {
                 const record=controls.get(path),joint=joints.get(path);
                 if(disposed||!record?.drive.enabled||!joint?.configureMotor)return false;
@@ -265,8 +272,9 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 joint.configureMotor(drive.targetPosition*unit,drive.targetVelocity*unit,drive.stiffness*gain,drive.damping*gain);
                 record.drive=drive;return true;
             },
-            bodyForObject: visuals.bodyForObject,
+            bodyForObject: (...args) => disposed ? null : visuals.bodyForObject(...args),
             beginDrag(path, position) {
+                if (disposed) return false;
                 endDrag();
                 const body = bodies.get(path)?.body;
                 if (!body?.isDynamic() || !playing) return false;
@@ -306,14 +314,18 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
 }
 
 /** One host-owned contact world for independently loaded asset instances. */
-export function createSimulationWorld({rapier: R, gravity, timestep = 1 / 120, metersPerUnit = 1, kilogramsPerUnit = 1} = {}) {
+export function createSimulationWorld({rapier: R, world: borrowedWorld, registerWorldExtension, gravity, timestep = 1 / 120, metersPerUnit = 1, kilogramsPerUnit = 1} = {}) {
     gravity ||= [0,-9.81/metersPerUnit,0];
     if (!R?.World || !Number.isFinite(metersPerUnit) || !Number.isFinite(kilogramsPerUnit) || !(metersPerUnit > 0) || !(kilogramsPerUnit > 0) || !Number.isFinite(timestep) || timestep <= 0 || gravity.length !== 3 || !gravity.every(Number.isFinite)) throw new TypeError('Invalid Rapier world options.');
-    const world = new R.World(vector(gravity)), events = new R.EventQueue(true), registrations = new Set(), assets = new Map(), pending = new Set();
-    world.timestep = timestep; world.lengthUnit = 1 / metersPerUnit; world.numSolverIterations = 12;
+    if (borrowedWorld && !(borrowedWorld instanceof R.World)) throw new TypeError('Supply the Rapier module that created the borrowed world.');
+    if (registerWorldExtension && !borrowedWorld) throw new TypeError('World extension registration requires a borrowed world.');
+    const ownsWorld = !borrowedWorld;
+    const world = borrowedWorld || new R.World(vector(gravity)), events = ownsWorld ? new R.EventQueue(true) : undefined;
+    const registrations = new Set(), assets = new Map(), pending = new Set(), resourceCleanup = new Set();
+    if (ownsWorld) {world.timestep = timestep; world.lengthUnit = 1 / metersPerUnit; world.numSolverIterations = 12;}
     let disposed = false, nextId = 1;
     let freed=false;
-    const finalize=()=>{if(disposed&&!pending.size&&!freed){freed=true;try{events.free();}finally{world.free();}}};
+    const finalize=()=>{if(ownsWorld&&disposed&&!pending.size&&!freed){freed=true;try{events.free();}finally{world.free();}}};
     const active = () => {if (disposed) throw new Error('Simulation world is disposed.');};
     const hooks = {
         filterContactPair(a, b) {
@@ -322,9 +334,14 @@ export function createSimulationWorld({rapier: R, gravity, timestep = 1 / 120, m
         },
         filterIntersectionPair() {return true;},
     };
-    const context = {world, events, register(entry) {registrations.add(entry); return () => registrations.delete(entry);}};
+    const context = {world, events, isDisposed: () => disposed,
+        trackResources(cleanup) {resourceCleanup.add(cleanup); return () => resourceCleanup.delete(cleanup);},
+        register(entry) {registrations.add(entry); return () => registrations.delete(entry);},
+    };
+    let unregisterHost;
+    const sync = () => {active(); for (const entry of registrations) entry.sync();};
     const host = {
-        world, assets, metersPerUnit, kilogramsPerUnit,
+        world, assets, metersPerUnit, kilogramsPerUnit, ownsWorld, hooks, sync,
         async addAsset({snapshot, id = 'asset-' + nextId++, position, rotation, bindVisuals, ...options}) {
             active();
             if(options.mode&&options.mode!=='simulation')throw new Error('Shared worlds run dynamics; use createMechanism for posing.');
@@ -349,18 +366,25 @@ export function createSimulationWorld({rapier: R, gravity, timestep = 1 / 120, m
         removeAsset(id) {active(); const runtime = assets.get(id); runtime?.dispose(); return !!runtime;},
         step(dt = timestep) {
             active();
+            if (!ownsWorld) throw new Error('The host owns stepping of this borrowed simulation world.');
             if (!Number.isFinite(dt) || dt <= 0) throw new RangeError('Step duration must be positive and finite.');
             world.timestep = dt; world.step(events, hooks);
-            for (const entry of registrations) entry.sync();
+            sync();
         },
         dispose() {
             if (disposed) return;
             disposed=true;const errors=[];
+            try{unregisterHost?.();}catch(error){errors.push(error);}
             for(const runtime of [...assets.values()])try{runtime.dispose();}catch(error){errors.push(error);}
+            for(const cleanup of [...resourceCleanup])try{cleanup();}catch(error){errors.push(error);}
             try{finalize();}catch(error){errors.push(error);}
             if(errors.length)throw new AggregateError(errors,'Simulation world disposal failed.');
         },
     };
+    if (registerWorldExtension) {
+        try {unregisterHost = registerWorldExtension({hooks, afterStep: sync, dispose: () => host.dispose()});}
+        catch (error) {host.dispose(); throw error;}
+    }
     return host;
 }
 
