@@ -120,6 +120,32 @@ export type SimulationAsset<W = World<import("./rapier-types.js").RigidBody>, B 
     readonly snapshot: PhysicsSnapshot;
 };
 export type SimulationHooks = import("./rapier-types.js").PhysicsHooks;
+/**
+ * Options for adding an asset to a shared world.
+ */
+export type HostAssetOptions = {
+    snapshot: PhysicsSnapshot;
+    id?: string;
+    position?: PhysicsVector;
+    rotation?: PhysicsRotation;
+    scenePath?: string;
+    allowPartial?: boolean;
+    mode?: "simulation";
+    bindVisuals?: (bodies: ReadonlyMap<string, {
+        data: PhysicsBody;
+        body: import("./kinematics.js").BodyPose;
+    }>, warn: (item: {
+        path: string;
+        type?: string;
+    }, reason: string) => void, signal: AbortSignal) => VisualBinding | Promise<VisualBinding>;
+};
+/**
+ * A world that several assets share: a SimReady world or a Needle Engine world.
+ */
+export type SimulationHost<A> = {
+    readonly metersPerUnit: number;
+    addAsset(options: HostAssetOptions): Promise<A>;
+};
 export type SimulationWorldExtension = {
     hooks: SimulationHooks;
     afterStep(): void;
