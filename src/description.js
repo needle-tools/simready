@@ -21,7 +21,7 @@
 /** @typedef {{id:string,type:'fixed'|'revolute'|'prismatic'|'spherical'|'distance'|'spring',body0?:string,body1?:string,
  * anchor0:Vector,rotation0:Rotation,anchor1:Vector,rotation1:Rotation,axis:Vector,limits?:{lower:number,upper:number},
  * drive?:DriveDescription,maxDistance?:number,spring?:{stiffness:number,damping:number,restLength?:number},
- * collisionEnabled:boolean,articulation?:string}} JointDescription */
+ * breakForce?:number,breakTorque?:number,collisionEnabled:boolean,articulation?:string}} JointDescription */
 /** @typedef {{id:string,bodies:string[],solverIterations:number}} ArticulationDescription */
 /** What the target physics backend supports.
  * @typedef {{backend:string,shapes:ReadonlySet<string>,joints:ReadonlySet<string>,features:ReadonlySet<string>}} Capabilities */
@@ -207,8 +207,13 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
             joint.type = 'distance'; joint.maxDistance = distance;
         } else { warn(data, 'Joint type or limits are not supported.'); continue; }
         if (!capabilities.joints.has(joint.type)) { warn(data, 'Joint type or limits are not supported.'); continue; }
-        if ((Number.isFinite(data.breakForce) || Number.isFinite(data.breakTorque)) && !capabilities.features.has('jointBreaking'))
-            warn(data, 'Joint breaking thresholds are not supported.');
+        if (Number.isFinite(data.breakForce) || Number.isFinite(data.breakTorque)) {
+            if (!capabilities.features.has('jointBreaking')) warn(data, 'Joint breaking thresholds are not supported.');
+            else {
+                if (Number.isFinite(data.breakForce)) joint.breakForce = /** @type {number} */ (data.breakForce);
+                if (Number.isFinite(data.breakTorque)) joint.breakTorque = /** @type {number} */ (data.breakTorque);
+            }
+        }
         const articulation = articulationOf.get(data.path);
         if (articulation && !data.excludeFromArticulation) joint.articulation = articulation;
         joints.push(joint); jointData.set(data.path, data);

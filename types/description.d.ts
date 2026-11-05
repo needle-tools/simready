@@ -123,6 +123,8 @@ export type JointDescription = {
         damping: number;
         restLength?: number;
     };
+    breakForce?: number;
+    breakTorque?: number;
     collisionEnabled: boolean;
     articulation?: string;
 };
