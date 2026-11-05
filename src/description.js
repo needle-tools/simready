@@ -21,7 +21,7 @@
 /** @typedef {{id:string,type:'fixed'|'revolute'|'prismatic'|'spherical'|'distance'|'spring',body0?:string,body1?:string,
  * anchor0:Vector,rotation0:Rotation,anchor1:Vector,rotation1:Rotation,axis:Vector,limits?:{lower:number,upper:number},
  * drive?:DriveDescription,maxDistance?:number,spring?:{stiffness:number,damping:number,restLength?:number},
- * breakForce?:number,breakTorque?:number,collisionEnabled:boolean,articulation?:string}} JointDescription */
+ * coneLimit?:number,breakForce?:number,breakTorque?:number,collisionEnabled:boolean,articulation?:string}} JointDescription */
 /** @typedef {{id:string,bodies:string[],solverIterations:number}} ArticulationDescription */
 /** What the target physics backend supports.
  * @typedef {{backend:string,shapes:ReadonlySet<string>,joints:ReadonlySet<string>,features:ReadonlySet<string>}} Capabilities */
@@ -189,9 +189,18 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
         const angular = data.type === 'revolute', unit = angular ? Math.PI / 180 : 1;
         if (data.type === 'fixed') joint.type = 'fixed';
         else if (data.type === 'spherical') {
-            // TODO: pass cone and twist limits to backends that support them (the sphericalLimits feature).
-            if (data.limit?.enabled) { warn(data, 'Spherical joint cone limits are not supported.'); continue; }
             joint.type = 'spherical';
+            // A spherical joint's limit holds its USD cone angles in degrees: lower is coneAngle0Limit and
+            // upper is coneAngle1Limit. Negative angles leave that direction unlimited. Backends take one
+            // circular cone, so the smaller angle applies.
+            const angles = data.limit?.enabled ? [data.limit.lower, data.limit.upper].filter(angle => angle !== null && angle >= 0) : [];
+            if (angles.length) {
+                if (!capabilities.features.has('sphericalLimits')) { warn(data, 'Spherical joint cone limits are not supported.'); continue; }
+                joint.coneLimit = Math.min(.../** @type {number[]} */ (angles)) * Math.PI / 180;
+                if (angles.length < 2 || angles[0] !== angles[1])
+                    adaptations.push({path: data.path, source: 'elliptical cone limit', target: 'circular cone limit',
+                        reason: 'The backend limits spherical joints with a circular cone, so the smaller authored angle applies in every direction.'});
+            }
         } else if (data.type === 'revolute' || data.type === 'prismatic') {
             joint.type = data.type;
             if (data.limit?.enabled) joint.limits = {lower: (data.limit.lower ?? -Infinity) * unit, upper: (data.limit.upper ?? Infinity) * unit};
