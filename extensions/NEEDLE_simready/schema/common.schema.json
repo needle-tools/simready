@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/needle-tools/simready/main/extensions/NEEDLE_simready/schema/common.schema.json",
+  "title": "NEEDLE_simready common definitions",
+  "$defs": {
+    "property": {
+      "type": "object",
+      "properties": {
+        "extensions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "extras": {}
+      }
+    },
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque source identity. USD exporters use composed absolute prim paths."
+    },
+    "bodyReference": {
+      "type": "string",
+      "description": "Body identity, or the empty string for the fixed world."
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Index into the glTF array identified by the containing property."
+    },
+    "vector3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "quaternion": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Rotation quaternion in [x, y, z, w] order.",
+      "not": {
+        "items": {
+          "const": 0
+        }
+      }
+    },
+    "identities": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/identity"
+      },
+      "uniqueItems": true
+    },
+    "issue": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ]
+    },
+    "nonNegativeVector3": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

@@ -18,7 +18,7 @@ export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit =
     /** @param {import('./index.js').PhysicsVector} value */
     const worldPoint = value => new Vector3(...value).multiplyScalar(length).applyQuaternion(basis).add(translate).toArray();
     /** @param {import('./index.js').PhysicsRotation} value @returns {import('./index.js').PhysicsRotation} */
-    const worldRotation = value => { const q = basis.clone().multiply(new Quaternion(...value)); return [q.x,q.y,q.z,q.w]; };
+    const worldRotation = value => { const q = basis.clone().multiply(new Quaternion(...value)).normalize(); return [q.x,q.y,q.z,q.w]; };
     /** @param {import('./index.js').PhysicsMass} item */
     const properties = item => {
         if ((item.mass ?? 0) > 0) item.mass = (item.mass ?? 0) * mass;
@@ -39,7 +39,7 @@ export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit =
         if (shape.halfExtents) shape.halfExtents = local(shape.halfExtents);
         if (shape.radius !== undefined && Number.isFinite(shape.radius)) shape.radius *= length;
         if (shape.halfHeight !== undefined && Number.isFinite(shape.halfHeight)) shape.halfHeight *= length;
-        if (shape.points) shape.points = shape.points.map(n => n * length);
+        if (shape.points) shape.points = Array.from(shape.points,n => n * length);
         properties(shape);
     }
     for (const joint of snapshot.joints) {
@@ -47,10 +47,15 @@ export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit =
             joint[end === 0 ? 'position0' : 'position1'] = joint[end === 0 ? 'body0' : 'body1'] ? local(joint[end === 0 ? 'position0' : 'position1'] || [0, 0, 0]) : worldPoint(joint[end === 0 ? 'position0' : 'position1'] || [0, 0, 0]);
             if (!joint[end === 0 ? 'body0' : 'body1']) joint[end === 0 ? 'rotation0' : 'rotation1'] = worldRotation(joint[end === 0 ? 'rotation0' : 'rotation1'] || [0, 0, 0, 1]);
         }
-        const angular = joint.type === 'revolute';
+        const angular = joint.type === 'revolute' || joint.type === 'spherical';
         if (!angular && joint.limit) for (const key of /** @type {const} */ (['lower', 'upper'])) {const value=joint.limit[key];if(value!==null&&Number.isFinite(value))joint.limit[key]=value*length;}
         for (const key of /** @type {const} */ (['minDistance', 'maxDistance'])) if (joint[key] !== undefined && Number.isFinite(joint[key])) joint[key] *= length;
-        if (joint.mimic && !angular) joint.mimic.offset *= length;
+        if (joint.mimic) {
+            const reference = source.joints.find(item => item.path === joint.mimic?.joint);
+            const referenceAngular = reference?.type === 'revolute' || reference?.type === 'spherical';
+            joint.mimic.multiplier *= (angular ? 1 : length) / (referenceAngular ? 1 : length);
+            if (!angular) joint.mimic.offset *= length;
+        }
         if (joint.drive) {
             const d = joint.drive, force = mass * length ** (angular ? 2 : 1);
             if (!angular) { d.targetPosition *= length; d.targetVelocity *= length; }

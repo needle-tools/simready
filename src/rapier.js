@@ -80,7 +80,7 @@ const rotation = (a = [0, 0, 0, 1]) => ({ x: a[0], y: a[1], z: a[2], w: a[3] });
 /** @param {PhysicsRotation | undefined} a */
 const q = a => new Quaternion().fromArray(a || [0, 0, 0, 1]);
 /** @param {string | undefined} name */
-const axis = name => new Vector3(...(name === 'X' ? [1, 0, 0] : name === 'Z' ? [0, 0, 1] : [0, 1, 0]));
+const axis = name => new Vector3(...(name === 'Y' ? [0, 1, 0] : name === 'Z' ? [0, 0, 1] : [1, 0, 0]));
 /** @param {string} parent @param {string} child */
 const contains = (parent, child) => child === parent || child.startsWith(parent + '/');
 const emptyVisualBinding = {sync(){},reset(){},bodyForObject(){return null;}};
@@ -372,7 +372,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 }
                 if(joint.configureMotorModel)joint.configureMotorModel(d.acceleration ? R.MotorModel.AccelerationBased : R.MotorModel.ForceBased);
                 else warn(data,'Drive motor modes are not supported by this Rapier version.');
-                const gainScale = (d.acceleration ? 1 : kgpu) / unit;
+                const gainScale = d.acceleration ? 1 : kgpu / unit;
                 joint.configureMotor(d.targetPosition * unit, d.targetVelocity * unit, d.stiffness * gainScale, d.damping * gainScale);
             }
             joints.set(data.path, joint);
@@ -470,7 +470,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 if (!record.data.drive?.enabled || !joint?.configureMotor) continue;
                 record.drive = {...record.data.drive};
                 const drive = record.drive, unit = record.data.type === 'revolute' ? Math.PI / 180 : 1;
-                const gain = (drive.acceleration ? 1 : kgpu) / unit;
+                const gain = drive.acceleration ? 1 : kgpu / unit;
                 joint.configureMotor(drive.targetPosition * unit, drive.targetVelocity * unit, drive.stiffness * gain, drive.damping * gain);
             }
             pauseBodies();
@@ -503,7 +503,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 if(disposed||!record?.drive?.enabled||!joint?.configureMotor)return false;
                 if(position!==undefined&&!Number.isFinite(position)||velocity!==undefined&&!Number.isFinite(velocity))throw new RangeError('Motor targets must be finite.');
                 const drive={...record.drive,targetPosition:position??record.drive.targetPosition,targetVelocity:velocity??record.drive.targetVelocity};
-                const unit=record.data.type==='revolute'?Math.PI/180:1,gain=(drive.acceleration?1:kgpu)/unit;
+                const unit=record.data.type==='revolute'?Math.PI/180:1,gain=drive.acceleration?1:kgpu/unit;
                 joint.configureMotor(drive.targetPosition*unit,drive.targetVelocity*unit,drive.stiffness*gain,drive.damping*gain);
                 record.drive=drive;return true;
             },

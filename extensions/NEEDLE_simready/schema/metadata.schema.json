@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/needle-tools/simready/main/extensions/NEEDLE_simready/schema/metadata.schema.json",
+  "title": "NEEDLE_simready USD semantic metadata",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/property"
+    }
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "time": {
+      "type": "number"
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/value"
+      }
+    },
+    "prims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/prim"
+      }
+    }
+  },
+  "required": [
+    "version",
+    "time",
+    "stage",
+    "prims"
+  ],
+  "$defs": {
+    "attribute": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "type": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "value": {
+          "$ref": "#/$defs/value"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "$ref": "#/$defs/value"
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/property"
+              }
+            ],
+            "properties": {
+              "time": {
+                "type": "number"
+              },
+              "value": {
+                "$ref": "#/$defs/value"
+              }
+            },
+            "required": [
+              "time",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "value"
+      ]
+    },
+    "prim": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "path": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "type": {
+          "type": "string"
+        },
+        "active": {
+          "const": false
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/attribute"
+          }
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/property"
+              }
+            ],
+            "properties": {
+              "name": {
+                "$ref": "common.schema.json#/$defs/identity"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/$defs/value"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "targets"
+            ]
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/property"
+              }
+            ],
+            "properties": {
+              "name": {
+                "$ref": "common.schema.json#/$defs/identity"
+              },
+              "selection": {
+                "type": "string"
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "name",
+              "selection",
+              "choices"
+            ]
+          }
+        }
+      },
+      "required": [
+        "path",
+        "type"
+      ]
+    },
+    "numberValue": {
+      "type": "object",
+      "properties": {
+        "$usdNumber": {
+          "enum": [
+            "Infinity",
+            "-Infinity",
+            "NaN"
+          ]
+        }
+      },
+      "required": [
+        "$usdNumber"
+      ],
+      "additionalProperties": false
+    },
+    "integerValue": {
+      "type": "object",
+      "properties": {
+        "$usdInteger": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)$"
+        }
+      },
+      "required": [
+        "$usdInteger"
+      ],
+      "additionalProperties": false
+    },
+    "textValue": {
+      "type": "object",
+      "properties": {
+        "$usdValue": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "$usdValue"
+      ],
+      "additionalProperties": false
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "$usdNumber": {}
+                },
+                "required": [
+                  "$usdNumber"
+                ]
+              },
+              "then": {
+                "$ref": "#/$defs/numberValue"
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "$usdInteger": {}
+                },
+                "required": [
+                  "$usdInteger"
+                ]
+              },
+              "then": {
+                "$ref": "#/$defs/integerValue"
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "$usdValue": {}
+                },
+                "required": [
+                  "$usdValue"
+                ]
+              },
+              "then": {
+                "$ref": "#/$defs/textValue"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

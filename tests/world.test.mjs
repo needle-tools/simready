@@ -15,6 +15,23 @@ const fixture=({metersPerUnit=1,kilogramsPerUnit=1,upAxis='Y',height=3}={})=>({
 });
 const floor=()=>({...fixture(),bodies:[],shapes:[{path:'/Floor',type:'cube',body:'',halfExtents:[10,.5,10],position:[0,-.5,0],rotation:q}]});
 
+test('omitted joint and collider axes use X consistently with explicit source axes',async()=>{
+ const make=explicit=>{
+  const snapshot=fixture();snapshot.bodies[0].position=[0,0,0];snapshot.scenes=[{path:'/Zero',gravityMagnitude:0}];
+  snapshot.shapes=[{path:'/Capsule',body:'/Body',type:'capsule',halfHeight:1,radius:.2,...explicit?{axis:'X'}:{}}];
+  snapshot.joints=[{path:'/Slide',type:'prismatic',body0:'',body1:'/Body',...explicit?{axis:'X'}:{},limit:{enabled:true,lower:0,upper:3},drive:{enabled:true,targetPosition:2,targetVelocity:0,stiffness:100,damping:20}}];
+  return snapshot;
+ };
+ const a=await createSimulation({snapshot:make(false),rapier:R}),b=await createSimulation({snapshot:make(true),rapier:R});
+ try{
+  for(let frame=0;frame<120;frame++){a.step();b.step();}
+  const pa=a.bodies.get('/Body').body.translation(),pb=b.bodies.get('/Body').body.translation();
+  assert.deepEqual({...pa},{...pb});assert.ok(pa.x>1);assert.ok(Math.abs(pa.y)<1e-5);
+  const ca=[...a.colliders.values()][0].collider,cb=[...b.colliders.values()][0].collider;
+  assert.deepEqual({...ca.rotation()},{...cb.rotation()});
+ }finally{a.dispose();b.dispose();}
+});
+
 test('headless assets collide across imports and removal leaves the host world intact',async()=>{
  assert.equal(globalThis.document,undefined);assert.equal(globalThis.window,undefined);
  const host=createSimulationWorld({rapier:R});

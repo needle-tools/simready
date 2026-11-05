@@ -22,7 +22,7 @@ export type RigidBody = import("./rapier-types.js").RigidBody;
 export type World = import("./rapier-types.js").World;
 export type ObjectBinding = import("./three.js").ObjectBinding;
 export type SimreadyRuntime = {
-    readonly snapshot: PhysicsSnapshot;
+    readonly snapshot: import("./index.js").GltfPhysicsSnapshot;
     readonly usdMetadata: SimreadyMetadata;
     readonly root: Object3D;
     readonly bindings: ObjectBinding[];
@@ -59,3 +59,4 @@ export type SimreadyLoader = {
     register(factory: (parser: SimreadyParser) => NeedleSimreadyLoaderPlugin): unknown;
 };
 export type CollisionPrimitive = import("three").Mesh | import("three").Line | import("three").Points;
+export { toGltfPhysicsSnapshot, fromGltfPhysicsSnapshot } from "./gltf/coordinates.js";

@@ -8,7 +8,7 @@
 /** @typedef {import('./rapier-types.js').RigidBody} RigidBody */
 /** @typedef {import('./rapier-types.js').World} World */
 /** @typedef {import('./three.js').ObjectBinding} ObjectBinding */
-/** @typedef {{readonly snapshot:PhysicsSnapshot,readonly usdMetadata:SimreadyMetadata,readonly root:Object3D,
+/** @typedef {{readonly snapshot:import('./index.js').GltfPhysicsSnapshot,readonly usdMetadata:SimreadyMetadata,readonly root:Object3D,
  * readonly bindings:ObjectBinding[],readonly mappingIssues:PhysicsIssue[],
  * createMechanism(options?:Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>):Promise<Mechanism&{root:Object3D}>,
  * createSimulation:CreateBoundSimulation}} SimreadyRuntime */
@@ -23,6 +23,8 @@
 
 import {SIMREADY_EXTENSION,encodeMetadata,createSimreadyExtension} from './index.js';
 import {bindVisuals,placeAssetRoot,withVisualController} from './three.js';
+import {fromGltfPhysicsSnapshot} from './gltf/coordinates.js';
+export {toGltfPhysicsSnapshot,fromGltfPhysicsSnapshot} from './gltf/coordinates.js';
 export {SIMREADY_EXTENSION} from './index.js';
 import {copyJson} from './json.js';
 import {isRecord,isWireSnapshot,isArray,isBinding,isMetadata,isIssue} from './validation.js';
@@ -48,7 +50,7 @@ export class NeedleSimreadyLoaderPlugin{
   if(data.source)throw new Error('Embedded USD source is not supported by the SimReady runtime contract.');
   const cloned=copyJson(data.snapshot);
   if(!isWireSnapshot(cloned))throw new Error('Invalid NEEDLE_simready snapshot.');
-  /** @type {PhysicsSnapshot & {shapes:Array<import('./index.js').PhysicsShape & {mesh?:number}>}} */
+  /** @type {import('./index.js').GltfPhysicsSnapshot & {shapes:Array<import('./index.js').PhysicsShape & {mesh?:number}>}} */
   const snapshot=cloned;
   for(const shape of snapshot.shapes)if(shape.type==='mesh'){
    const definition=typeof shape.mesh==='number'&&Number.isInteger(shape.mesh)?this.parser.json.meshes?.[shape.mesh]:undefined;
@@ -103,7 +105,7 @@ export class NeedleSimreadyLoaderPlugin{
   /** @param {Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>} [options] */
   async function createBoundMechanism(options={}){return withVisualController(root,async()=>{
    const{createMechanism}=await import('./kinematics.js');
-   return Object.assign(await createMechanism({...options,snapshot:structuredClone(snapshot),bindVisuals:bind(false)}),{root});
+   return Object.assign(await createMechanism({...options,snapshot:fromGltfPhysicsSnapshot(snapshot),bindVisuals:bind(false)}),{root});
   });}
   /** @template {RigidBody} B
    * @template {import('./rapier-types.js').World<B>} W
@@ -113,14 +115,14 @@ export class NeedleSimreadyLoaderPlugin{
    */
   async function createBoundSimulation(options){return withVisualController(root,async()=>{
    if(options.world){
-    const{world,...assetOptions}=options,placement=placeAssetRoot(root,snapshot,world,assetOptions);
-    try{const simulation=await world.addAsset({...assetOptions,snapshot:structuredClone(snapshot),bindVisuals:bind(true)});
+    const{world,...assetOptions}=options,runtimeSnapshot=fromGltfPhysicsSnapshot(snapshot),placement=placeAssetRoot(root,runtimeSnapshot,world,assetOptions);
+    try{const simulation=await world.addAsset({...assetOptions,snapshot:runtimeSnapshot,bindVisuals:bind(true)});
      const dispose=simulation.dispose;let disposed=false;simulation.dispose=()=>{if(disposed)return;disposed=true;try{dispose();}finally{placement.reset();}};return Object.assign(simulation,{root});
     }catch(error){placement.reset();throw error;}
    }
    const{createSimulation}=await import('./rapier.js');
    /** @type {import('./rapier.js').SimulationOptions<B,W>} */
-   const simulationOptions={...options,snapshot:structuredClone(snapshot),bindVisuals:bind(false)};
+   const simulationOptions={...options,snapshot:fromGltfPhysicsSnapshot(snapshot),bindVisuals:bind(false)};
    return Object.assign(await createSimulation(simulationOptions),{root});
   });}
   result.userData||={};

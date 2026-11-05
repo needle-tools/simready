@@ -13,7 +13,8 @@ const snapshot={
  shapes:[{path:'/Box/Collider',body:'/Box',type:'cube',position:[0,0,0],rotation:[0,0,0,1],halfExtents:[.5,.5,.5]},
  {path:'/Floor',body:'',type:'cube',position:[0,-.5,0],rotation:[0,0,0,1],halfExtents:[5,.5,5]}],
 } satisfies PhysicsSnapshot;
-createSimreadyExtension({snapshot,stageNode:0,bindings:[{node:1,path:'/Box'}]});
+const {metersPerUnit,kilogramsPerUnit,upAxis,...wire}=snapshot;
+createSimreadyExtension({snapshot:wire,stageNode:0,bindings:[{node:1,path:'/Box'}]});
 const host=createSimulationWorld({rapier:R});
 const world:World=host.world;
 const attached=await host.addAsset({snapshot});

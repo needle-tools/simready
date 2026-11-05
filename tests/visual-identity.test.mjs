@@ -1,10 +1,28 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import R from '@dimforge/rapier3d-compat';
-import {Object3D,InstancedMesh,BoxGeometry,MeshBasicMaterial} from 'three';
+import {Object3D,InstancedMesh,BoxGeometry,MeshBasicMaterial,Vector3} from 'three';
 import {createSimulationWorld} from '../src/rapier.js';
 import {bindVisuals} from '../src/three.js';
 await R.init();
+test('nested visuals follow their owners independently of binding order and reset their local poses',()=>{
+ for(const worldSpace of [false,true]){
+  const root=new Object3D(),parent=new Object3D(),child=new Object3D();
+  root.position.x=10;parent.position.x=1;child.position.x=1;root.add(parent);parent.add(child);
+  let x=worldSpace?11:1;
+  const owner={data:{path:'/Body',position:[1,0,0],rotation:[0,0,0,1]},body:{translation:()=>({x,y:0,z:0}),rotation:()=>({x:0,y:0,z:0,w:1})}};
+  const binding=bindVisuals({root,bodies:new Map([['/Body',owner]]),bindings:[{object:child,body:'/Body'},{object:parent,body:'/Body'}],worldSpace});
+  for(let step=1;step<=3;step++){
+   x++;binding.sync();
+   assert.equal(parent.getWorldPosition(new Vector3()).x,11+step);
+   assert.equal(child.getWorldPosition(new Vector3()).x,12+step);
+  }
+  binding.reset();
+  assert.equal(parent.position.x,1);assert.equal(child.position.x,1);
+  assert.equal(parent.matrixAutoUpdate,true);assert.equal(child.matrixAutoUpdate,true);
+  assert.equal(child.getWorldPosition(new Vector3()).x,12);
+ }
+});
 test('visual identity survives pause, reset and body types while drag eligibility remains separate',async()=>{
  const q=[0,0,0,1],paths=['/Dynamic','/Fixed','/Kinematic'];
  const snapshot={metersPerUnit:1,kilogramsPerUnit:1,upAxis:'Y',scenes:[],materials:[],groups:[],joints:[],unsupported:[],shapes:[],bodies:paths.map((path,i)=>({path,position:[i*2,0,0],rotation:q,mass:1,...i===1?{rigidBodyEnabled:false}:i===2?{kinematicBody:true}:{}}))};

@@ -26,9 +26,9 @@ const v4 = value => vector(value, 4);
 const mass = value => optional(value, ['mass','density'], item => item === null || number(item))
     && optional(value, ['centerOfMass','diagonalInertia'], v3) && optional(value, ['principalAxes'], v4);
 /** @param {unknown} value */
-const identity = value => isRecord(value) && typeof value.path === 'string';
+const identity = value => isRecord(value) && typeof value.path === 'string' && value.path.length > 0;
 /** @param {unknown} value @returns {value is import('./index.js').PhysicsIssue} */
-export const isIssue = value => identity(value) && isRecord(value) && typeof value.reason === 'string' && optional(value, ['type'], text);
+export const isIssue = value => isRecord(value) && typeof value.path === 'string' && typeof value.reason === 'string' && optional(value, ['type'], text);
 /** @param {unknown} value */
 const body = value => isRecord(value) && identity(value) && v3(value.position) && v4(value.rotation) && mass(value)
     && optional(value, ['scale','linearVelocity','angularVelocity'], v3)
@@ -91,9 +91,9 @@ export function isMetadata(value) {
     return value.prims.every(prim => isRecord(prim) && identity(prim) && typeof prim.type === 'string'
         && optional(prim, ['active'], item => item === false) && optional(prim, ['metadata'], isRecord)
         && optional(prim, ['attributes'], item => isArray(item) && item.every(attribute => isRecord(attribute)
-            && typeof attribute.name === 'string' && typeof attribute.type === 'string'
+            && typeof attribute.name === 'string' && attribute.name.length > 0 && typeof attribute.type === 'string' && attribute.type.length > 0 && Object.hasOwn(attribute,'value')
             && optional(attribute, ['metadata'], isRecord) && optional(attribute, ['connections'], strings)
-            && optional(attribute, ['samples'], samples => isArray(samples) && samples.every(sample => isRecord(sample) && typeof sample.time === 'number'))))
+            && optional(attribute, ['samples'], samples => isArray(samples) && samples.every(sample => isRecord(sample) && typeof sample.time === 'number' && Object.hasOwn(sample,'value')))))
         && optional(prim, ['relationships'], item => isArray(item) && item.every(relation => isRecord(relation) && typeof relation.name === 'string'
             && strings(relation.targets) && optional(relation, ['metadata'], isRecord)))
         && optional(prim, ['variants'], item => isArray(item) && item.every(variant => isRecord(variant)
@@ -101,7 +101,7 @@ export function isMetadata(value) {
 }
 
 /** @param {unknown} value @returns {value is import('./index.js').SimreadyBinding} */
-export const isBinding = value => isRecord(value) && typeof value.node === 'number' && typeof value.path === 'string' && optional(value, ['body'], text);
+export const isBinding = value => isRecord(value) && typeof value.node === 'number' && Number.isInteger(value.node) && value.node >= 0 && typeof value.path === 'string' && value.path.length > 0 && optional(value, ['body'], text);
 /** @param {unknown} value @returns {value is import('./index.js').WireSnapshot} */
 export const isWireSnapshot = value => isSnapshot(value) && value.shapes.every(shape => shape.points === undefined && shape.indices === undefined
     && (!('mesh' in shape) || typeof shape.mesh === 'number'));

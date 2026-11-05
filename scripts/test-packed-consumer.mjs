@@ -18,7 +18,7 @@ run(root,'npm',['install','--no-audit','--no-fund','--prefer-offline']);
 assert.equal(await realpath(join(root,'node_modules/@needle-tools/simready')),join(await realpath(root),'node_modules/@needle-tools/simready'));
 result.dependencies=run(root,'npm',['ls','three','@needle-tools/simready',...(engineTarball?['@needle-tools/engine']:[])]);
 const probe=`import {createSimreadyExtension} from '@needle-tools/simready';
-import {registerSimreadyLoader} from '@needle-tools/simready/gltf';
+import {registerSimreadyLoader,toGltfPhysicsSnapshot} from '@needle-tools/simready/gltf';
 import {createSimulationWorld} from '@needle-tools/simready/rapier';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import R from '@dimforge/rapier3d-compat';
@@ -26,7 +26,7 @@ const check=(value,message)=>{if(!value)throw new Error(message);};
 export async function probe(){
  await R.init();
  const q=[0,0,0,1],snapshot={metersPerUnit:1,kilogramsPerUnit:1,upAxis:'Y',bodies:[{path:'/Body',position:[0,3,0],rotation:q,scale:[1,1,1],mass:2,rigidBodyEnabled:true}],shapes:[{path:'/Shape',body:'/Body',type:'cube',halfExtents:[.5,.5,.5],position:[0,0,0],rotation:q}],joints:[],materials:[],groups:[],scenes:[],unsupported:[]};
- const extension=createSimreadyExtension({snapshot,stageNode:0,bindings:[{node:1,path:'/Body'}]});
+ const extension=createSimreadyExtension({snapshot:toGltfPhysicsSnapshot(snapshot),stageNode:0,bindings:[{node:1,path:'/Body'}]});
  const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1]},{translation:[0,3,0]}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:extension}};
  const result=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(json),'');
  const runtime=result.userData.simready;check(!runtime.handle,'glTF must not manufacture a USD handle');
@@ -63,7 +63,7 @@ await writeFile(join(root,'node.mjs'),"import {probe} from './probe.js';\nimport
 result.node=JSON.parse(run(root,'node',['node.mjs']).trim());
 await writeFile(join(root,'consumer.ts'),`import R from '@dimforge/rapier3d-compat';
 import {createSimulationWorld} from '@needle-tools/simready/rapier';
-import {registerSimreadyLoader} from '@needle-tools/simready/gltf';
+import {registerSimreadyLoader,toGltfPhysicsSnapshot} from '@needle-tools/simready/gltf';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const host=createSimulationWorld({rapier:R});host.world.timestep=1/120;
 const external=new R.World({x:0,y:-9.81,z:0});

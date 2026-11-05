@@ -52,7 +52,8 @@ time:number;
 stage:Record<string,unknown>;
 prims:Array<{path:string;type:string;active?:false;metadata?:Record<string,unknown>;attributes?:Array<{name:string;type:string;value:unknown;metadata?:Record<string,unknown>;connections?:string[];default?:unknown;samples?:Array<{time:number;value:unknown}>}>;relationships?:Array<{name:string;metadata?:Record<string,unknown>;targets:string[]}>;variants?:Array<{name:string;selection:string;choices:string[]}>}>;}} SimreadyMetadata */
 /** @typedef {Omit<PhysicsShape,'points'|'indices'>&{mesh?:number,points?:never,indices?:never}} WireShape */
-/** @typedef {Omit<PhysicsSnapshot,'shapes'>&{shapes:WireShape[]}} WireSnapshot */
+/** @typedef {Omit<PhysicsSnapshot,'metersPerUnit'|'kilogramsPerUnit'|'upAxis'>} GltfPhysicsSnapshot */
+/** @typedef {Omit<GltfPhysicsSnapshot,'shapes'>&{shapes:WireShape[]}} WireSnapshot */
 /** @typedef {{version:1;
 stageNode:number;
 snapshot:WireSnapshot;
@@ -128,6 +129,7 @@ export function getSnapshotIssues(snapshot){
 /** @param {{snapshot: WireSnapshot, bindings: SimreadyBinding[], stageNode: number, usdMetadata?: SimreadyMetadata, mappingIssues?: PhysicsIssue[]}} options */
 export function createSimreadyExtension({snapshot, bindings, stageNode, usdMetadata = {version: 1, time: 0, stage: {}, prims: []}, mappingIssues = []}) {
     validateSnapshot(snapshot);
+    if (!isWireSnapshot(snapshot)) throw new TypeError('Invalid SimReady payload.');
     if (!Number.isInteger(stageNode) || stageNode < 0 || !Array.isArray(bindings)) throw new TypeError('SimReady requires a stage node and bindings.');
     if (usdMetadata.version !== 1 || !Array.isArray(usdMetadata.prims)) throw new TypeError('Invalid SimReady semantic metadata.');
     const nodes = new Set(), bodies = new Set(snapshot.bodies.map(body => body.path));

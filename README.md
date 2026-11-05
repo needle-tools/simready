@@ -10,6 +10,20 @@ Create one controller for an asset and keep it while the asset is in use. Choose
 joint posing for direct manipulation, or dynamics for gravity and contacts. The
 examples show these as alternatives; loading an asset does not start either one.
 
+## glTF extension specification
+
+The [NEEDLE_simready specification](extensions/NEEDLE_simready/README.md)
+defines the versioned data contract, glTF coordinates, semantic metadata,
+reference handling and related glTF extensions. It includes
+[JSON Schemas](extensions/NEEDLE_simready/schema/glTF.NEEDLE_simready.schema.json)
+and self-contained examples.
+See the [implementation notes](extensions/NEEDLE_simready/implementation.md)
+for SimReady Foundation capability mapping, current gaps and the glTF 2.1
+core-shape draft.
+
+The [USD export guide](docs/usd-export.md) covers converting a composed stage,
+preserving its simulation data, and loading the result in a glTF application.
+
 ## Three.js
 
 Register the extension on your `GLTFLoader` before loading a SimReady GLB. In an
@@ -31,10 +45,10 @@ const mechanism = await runtime.createMechanism();
 mechanism.setJointValue('/Assembly/Hinge', 45);
 ```
 
-Loading preserves the resting pose and starts no solver. Kinematics loads on demand and handles limits, fixed attachments, mimic relationships and closed linkages. Hinge values are degrees; slider values use the asset's stage units.
+Loading preserves the resting pose and starts no solver. Kinematics loads on demand and handles limits, fixed attachments, mimic relationships and closed linkages. Hinge controls use degrees; slider controls use metres.
 
 Use the joint paths stored in your asset; `/Assembly/Hinge` and `/Assembly/Slide`
-are examples. `runtime.snapshot` contains the bodies, colliders and joints, and
+are examples. `runtime.snapshot` contains the bodies, colliders and joints in glTF metres and radians, and
 `runtime.usdMetadata` contains the retained schema metadata.
 
 For dynamics without an existing physics host, install Rapier:

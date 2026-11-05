@@ -190,7 +190,8 @@ export type WireShape = Omit<PhysicsShape, "points" | "indices"> & {
     points?: never;
     indices?: never;
 };
-export type WireSnapshot = Omit<PhysicsSnapshot, "shapes"> & {
+export type GltfPhysicsSnapshot = Omit<PhysicsSnapshot, "metersPerUnit" | "kilogramsPerUnit" | "upAxis">;
+export type WireSnapshot = Omit<GltfPhysicsSnapshot, "shapes"> & {
     shapes: WireShape[];
 };
 export type SimreadyExtension = {

@@ -45,6 +45,17 @@ export function bindVisuals({root, bodies, bindings, worldSpace = false}) {
         let identities = byObject.get(object); if (!identities) byObject.set(object, identities = new Map());
         identities.set(index ?? 0, owner);
     }
+    // Update ancestors before their bound children so each child can resolve
+    // its local transform against the parent's new pose.
+    /** @type {WeakMap<Object3D,number>} */
+    const depths = new WeakMap();
+    /** @param {Object3D} object @returns {number} */
+    const depth = object => {
+        const cached = depths.get(object); if (cached !== undefined) return cached;
+        const value = object.parent ? depth(object.parent) + 1 : 0;
+        depths.set(object, value); return value;
+    };
+    records.sort((a,b) => depth(a.object) - depth(b.object));
     function update(reset = false) {
         /** @type {Set<import('three').InstancedMesh>} */
         const changed = new Set();

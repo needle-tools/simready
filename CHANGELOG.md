@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Specify the NEEDLE_simready glTF extension with JSON Schemas, examples and interoperability guidance.
+
 - Match TypeScript descriptors to runtime defaults and retain native Rapier types when creating simulations from glTF.
 - Load SimReady glTF assets in Three.js and Needle Engine.
 - Run standalone or shared-world Rapier simulation in browsers and Node.js, including interaction with other Needle physics objects.

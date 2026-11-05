@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/needle-tools/simready/main/extensions/NEEDLE_simready/schema/glTF.NEEDLE_simready.schema.json",
+  "title": "NEEDLE_simready glTF document extension",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/property"
+    }
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "stageNode": {
+      "$ref": "common.schema.json#/$defs/index",
+      "description": "Index into glTF nodes; the asset-local reference root. Its ordinary glTF transform places the asset in the scene."
+    },
+    "snapshot": {
+      "$ref": "snapshot.schema.json"
+    },
+    "usdMetadata": {
+      "$ref": "metadata.schema.json"
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "common.schema.json#/$defs/property"
+          }
+        ],
+        "properties": {
+          "node": {
+            "$ref": "common.schema.json#/$defs/index",
+            "description": "Index into glTF nodes."
+          },
+          "path": {
+            "$ref": "common.schema.json#/$defs/identity"
+          },
+          "body": {
+            "$ref": "common.schema.json#/$defs/bodyReference"
+          },
+          "instance": {}
+        },
+        "required": [
+          "node",
+          "path"
+        ]
+      }
+    },
+    "mappingIssues": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/issue"
+      },
+      "default": []
+    },
+    "source": false
+  },
+  "required": [
+    "version",
+    "stageNode",
+    "snapshot",
+    "usdMetadata",
+    "bindings"
+  ]
+}

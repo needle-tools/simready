@@ -1,0 +1,720 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/needle-tools/simready/main/extensions/NEEDLE_simready/schema/snapshot.schema.json",
+  "title": "NEEDLE_simready physics snapshot",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/property"
+    }
+  ],
+  "properties": {
+    "bodies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/body"
+      }
+    },
+    "shapes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/shape"
+      }
+    },
+    "joints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/joint"
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "common.schema.json#/$defs/property"
+          }
+        ],
+        "properties": {
+          "path": {
+            "$ref": "common.schema.json#/$defs/identity"
+          },
+          "gravityDirection": {
+            "$ref": "common.schema.json#/$defs/vector3",
+            "description": "Gravity direction in the asset-local frame."
+          },
+          "gravityMagnitude": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Gravity magnitude in metres per second squared."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "common.schema.json#/$defs/property"
+          }
+        ],
+        "properties": {
+          "path": {
+            "$ref": "common.schema.json#/$defs/identity"
+          },
+          "staticFriction": {
+            "type": "number",
+            "minimum": 0
+          },
+          "dynamicFriction": {
+            "type": "number",
+            "minimum": 0
+          },
+          "restitution": {
+            "type": "number",
+            "minimum": 0
+          },
+          "density": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "common.schema.json#/$defs/property"
+          }
+        ],
+        "properties": {
+          "path": {
+            "$ref": "common.schema.json#/$defs/identity"
+          },
+          "filteredGroups": {
+            "$ref": "common.schema.json#/$defs/identities"
+          },
+          "invertFilteredGroups": {
+            "type": "boolean",
+            "default": false
+          },
+          "mergedGroups": {
+            "$ref": "common.schema.json#/$defs/identities"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    "articulations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/articulation"
+      }
+    },
+    "unsupported": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/issue"
+      }
+    }
+  },
+  "required": [
+    "bodies",
+    "shapes",
+    "joints",
+    "scenes",
+    "materials",
+    "groups"
+  ],
+  "$defs": {
+    "body": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "path": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "position": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "description": "Position in metres, relative to the asset-local reference root."
+        },
+        "rotation": {
+          "$ref": "common.schema.json#/$defs/quaternion"
+        },
+        "scale": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "default": [
+            1,
+            1,
+            1
+          ]
+        },
+        "mass": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Mass in kilograms."
+        },
+        "density": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Density in kilograms per cubic metre."
+        },
+        "centerOfMass": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "description": "Local centre of mass in metres."
+        },
+        "diagonalInertia": {
+          "$ref": "common.schema.json#/$defs/nonNegativeVector3",
+          "description": "Principal moments in kilogram metres squared."
+        },
+        "principalAxes": {
+          "$ref": "common.schema.json#/$defs/quaternion"
+        },
+        "rigidBodyEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "kinematicBody": {
+          "type": "boolean",
+          "default": false
+        },
+        "startsAsleep": {
+          "type": "boolean",
+          "default": false
+        },
+        "linearVelocity": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "description": "Metres per second in the asset-local frame."
+        },
+        "angularVelocity": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "description": "Radians per second in the asset-local frame."
+        },
+        "filteredCollisions": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "simulationOwners": {
+          "$ref": "common.schema.json#/$defs/identities"
+        }
+      },
+      "required": [
+        "path",
+        "position",
+        "rotation"
+      ]
+    },
+    "shape": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "mesh"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "mesh": {
+                "$ref": "common.schema.json#/$defs/index"
+              }
+            },
+            "required": [
+              "mesh"
+            ]
+          },
+          "else": {
+            "properties": {
+              "mesh": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "cube"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "halfExtents"
+            ],
+            "properties": {
+              "halfExtents": {}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "sphere"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "radius"
+            ],
+            "properties": {
+              "radius": {}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "capsule",
+                  "cylinder",
+                  "cone"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "radius",
+              "halfHeight"
+            ],
+            "properties": {
+              "radius": {},
+              "halfHeight": {}
+            }
+          }
+        }
+      ],
+      "properties": {
+        "path": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Known types: cube, sphere, capsule, cylinder, cone, plane and mesh. Other types retain source data for capable consumers."
+        },
+        "body": {
+          "$ref": "common.schema.json#/$defs/bodyReference"
+        },
+        "position": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "default": [
+            0,
+            0,
+            0
+          ],
+          "description": "Position in metres, relative to the owning body or the asset-local reference root for a static collider."
+        },
+        "rotation": {
+          "$ref": "common.schema.json#/$defs/quaternion",
+          "default": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": {
+          "$ref": "common.schema.json#/$defs/vector3"
+        },
+        "mass": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Mass in kilograms."
+        },
+        "density": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Density in kilograms per cubic metre."
+        },
+        "centerOfMass": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "description": "Local centre of mass in metres."
+        },
+        "diagonalInertia": {
+          "$ref": "common.schema.json#/$defs/nonNegativeVector3",
+          "description": "Principal moments in kilogram metres squared."
+        },
+        "principalAxes": {
+          "$ref": "common.schema.json#/$defs/quaternion"
+        },
+        "collisionEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "simulationOwners": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "materials": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "filteredCollisions": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "collisionGroups": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "halfExtents": {
+          "$ref": "common.schema.json#/$defs/nonNegativeVector3",
+          "description": "Box half sizes in metres."
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Radius in metres."
+        },
+        "halfHeight": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Half the axial height in metres; for a capsule this excludes the hemispherical end caps."
+        },
+        "axis": {
+          "enum": [
+            "X",
+            "Y",
+            "Z"
+          ],
+          "default": "X",
+          "description": "Longitudinal axis for capsule, cylinder and cone; normal axis for plane."
+        },
+        "approximation": {
+          "type": "string"
+        },
+        "meshScale": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "default": [
+            1,
+            1,
+            1
+          ]
+        },
+        "mesh": {
+          "$ref": "common.schema.json#/$defs/index",
+          "description": "Index into glTF meshes. Decoded positions are in collider-local coordinates, in metres."
+        },
+        "points": false,
+        "indices": false
+      },
+      "required": [
+        "path",
+        "type"
+      ]
+    },
+    "joint": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "path": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source joint kind; the wire format also retains kinds unsupported by a selected solver."
+        },
+        "body0": {
+          "$ref": "common.schema.json#/$defs/bodyReference"
+        },
+        "body1": {
+          "$ref": "common.schema.json#/$defs/bodyReference"
+        },
+        "position0": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "default": [
+            0,
+            0,
+            0
+          ],
+          "description": "Attachment position in metres, relative to the corresponding body or the asset-local reference root for the fixed world."
+        },
+        "position1": {
+          "$ref": "common.schema.json#/$defs/vector3",
+          "default": [
+            0,
+            0,
+            0
+          ],
+          "description": "Attachment position in metres, relative to the corresponding body or the asset-local reference root for the fixed world."
+        },
+        "rotation0": {
+          "$ref": "common.schema.json#/$defs/quaternion",
+          "default": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "rotation1": {
+          "$ref": "common.schema.json#/$defs/quaternion",
+          "default": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "jointEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "collisionEnabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "excludeFromArticulation": {
+          "type": "boolean",
+          "default": false
+        },
+        "axis": {
+          "enum": [
+            "X",
+            "Y",
+            "Z"
+          ],
+          "default": "X"
+        },
+        "limit": {
+          "$ref": "#/$defs/limit"
+        },
+        "drive": {
+          "$ref": "#/$defs/drive"
+        },
+        "minEnabled": {
+          "type": "boolean"
+        },
+        "maxEnabled": {
+          "type": "boolean"
+        },
+        "minDistance": {
+          "type": "number",
+          "description": "Distance in metres."
+        },
+        "maxDistance": {
+          "type": "number",
+          "description": "Distance in metres."
+        },
+        "breakForce": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Breaking force in newtons; null means unbounded."
+        },
+        "breakTorque": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Breaking torque in newton metres; null means unbounded."
+        },
+        "mimic": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "common.schema.json#/$defs/property"
+            }
+          ],
+          "properties": {
+            "joint": {
+              "$ref": "common.schema.json#/$defs/identity"
+            },
+            "multiplier": {
+              "type": "number"
+            },
+            "offset": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "joint",
+            "multiplier",
+            "offset"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "type"
+      ]
+    },
+    "limit": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "lower": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Bound in radians for angular joints or metres for linear joints; null means unbounded."
+        },
+        "upper": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Bound in radians for angular joints or metres for linear joints; null means unbounded."
+        }
+      },
+      "required": [
+        "enabled",
+        "lower",
+        "upper"
+      ]
+    },
+    "drive": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "targetPosition": {
+          "type": "number",
+          "description": "Radians for angular joints or metres for linear joints."
+        },
+        "targetVelocity": {
+          "type": "number",
+          "description": "Radians per second for angular joints or metres per second for linear joints."
+        },
+        "stiffness": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Force or torque per position error; inverse seconds squared for acceleration drives."
+        },
+        "damping": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Force or torque per velocity error; inverse seconds for acceleration drives."
+        },
+        "acceleration": {
+          "type": "boolean",
+          "default": false
+        },
+        "forceLimit": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Newtons for linear drives or newton metres for angular drives; null means unbounded."
+        }
+      },
+      "required": [
+        "enabled",
+        "targetPosition",
+        "targetVelocity",
+        "stiffness",
+        "damping"
+      ]
+    },
+    "articulation": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/property"
+        }
+      ],
+      "properties": {
+        "path": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "rootPrims": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "filteredCollisions": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "articulatedJoints": {
+          "$ref": "common.schema.json#/$defs/identities"
+        },
+        "articulatedBodies": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/bodyReference"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "path",
+        "rootPrims",
+        "filteredCollisions",
+        "articulatedJoints",
+        "articulatedBodies"
+      ]
+    }
+  },
+  "description": "Physics in the fixed glTF right-handed, Y-up coordinate system, using metres, kilograms, seconds and radians."
+}
