@@ -260,6 +260,12 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             reason: 'Rapier has no gear or mimic constraint, so the follower is driven toward the leader after each step and lags slightly under load.'});
     }
     const updateCouplings = () => {
+        // Rapier's sleep threshold can exceed a commanded motor speed. Keep powered
+        // endpoints awake while velocity is requested; a stopped motor may sleep normally.
+        for (const [path, drive] of drives) if (drive.targetVelocity !== 0) {
+            for (const body of jointBodies.get(path) || [])
+                if (world.bodies.contains(body.handle) && body.isDynamic()) body.wakeUp();
+        }
         for (const coupling of couplings) {
             const [body0, body1] = /** @type {[B,B]} */ (jointBodies.get(coupling.leader.id));
             if (!world.bodies.contains(body0.handle) || !world.bodies.contains(body1.handle)) continue;
@@ -282,6 +288,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             const joint = joints.get(path), drive = drives.get(path);
             if (!joint?.configureMotor || !drive) return false;
             joint.configureMotor(position, velocity, drive.stiffness, drive.damping);
+            drives.set(path, {...drive, targetPosition: position, targetVelocity: velocity});
             return true;
         },
         hold() {
