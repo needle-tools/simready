@@ -31,3 +31,23 @@ test('break thresholds reach backends that can break joints', () => {
     assert.equal(description.joints[0].breakTorque, 5);
     assert.deepEqual(description.issues, []);
 });
+
+test('mimic joints become couplings in description units', () => {
+    const source = {...snapshot({}), bodies: [{path: '/Rack', position: [0, 0, 0], rotation: [0, 0, 0, 1]}, {path: '/Pinion', position: [0, 0, 1], rotation: [0, 0, 0, 1]}],
+        joints: [{path: '/Slide', type: 'prismatic', body1: '/Rack'}, {path: '/Turn', type: 'revolute', body1: '/Pinion', mimic: {joint: '/Slide', multiplier: 90, offset: 10}}]};
+    const withJoints = features => ({...capabilities(features), joints: new Set(['revolute', 'prismatic'])});
+    // 90 degrees per unit of slide is π/2 radians per unit; the 10 degree offset becomes radians too.
+    const turn = describeSimulation(source, {capabilities: {...withJoints([]), jointCoupling: 'emulated'}}).joints.find(joint => joint.id === '/Turn');
+    assert.ok(Math.abs(turn.coupling.multiplier - Math.PI / 2) < 1e-9);
+    assert.ok(Math.abs(turn.coupling.offset - 10 * Math.PI / 180) < 1e-9);
+    const unsupported = describeSimulation(source, {capabilities: withJoints([])});
+    assert.equal(unsupported.joints.find(joint => joint.id === '/Turn').coupling, undefined);
+    assert.equal(unsupported.issues[0].reason, 'Mimic joint coupling is not supported by this physics backend.');
+});
+
+test('a mimic joint whose leader is left out moves freely', () => {
+    const source = {...snapshot({}), joints: [{path: '/Turn', type: 'revolute', body1: '/Lamp', mimic: {joint: '/Missing', multiplier: 1, offset: 0}}]};
+    const description = describeSimulation(source, {capabilities: {...capabilities([]), joints: new Set(['revolute']), jointCoupling: 'emulated'}});
+    assert.equal(description.joints[0].coupling, undefined);
+    assert.match(description.issues[0].reason, /leader is not simulated/);
+});

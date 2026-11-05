@@ -280,7 +280,9 @@ freeing the host world. Needle handles this registration automatically.
 Joint frames, limits, drives, collision filters and mass properties are retained.
 Fixed articulation links use reduced coordinates; movable links use impulse
 constraints. SDF meshes use convex decomposition with concave compound contacts,
-rather than PhysX SDF evaluation. `backend.adaptations` describes conversions.
+rather than PhysX SDF evaluation. Mimic joints follow their leader through a drive
+that is updated after each step, so they lag slightly under load. `backend.adaptations`
+describes conversions.
 
 Unsupported features reject by default; `allowPartial: true` returns diagnostics.
 Simulation and motor targets do not modify authored data. Custom async visual

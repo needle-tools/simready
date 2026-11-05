@@ -128,6 +128,11 @@ export type JointDescription = {
     breakTorque?: number;
     collisionEnabled: boolean;
     articulation?: string;
+    coupling?: {
+        joint: string;
+        multiplier: number;
+        offset: number;
+    };
 };
 export type ArticulationDescription = {
     id: string;
@@ -135,13 +140,14 @@ export type ArticulationDescription = {
     solverIterations: number;
 };
 /**
- * What the target physics backend supports.
+ * What the target physics backend supports. jointCoupling says whether joints can follow other joints.
  */
 export type Capabilities = {
     backend: string;
     shapes: ReadonlySet<string>;
     joints: ReadonlySet<string>;
     features: ReadonlySet<string>;
+    jointCoupling?: "native" | "emulated" | "none";
 };
 export type Adaptation = {
     path: string;

@@ -19,11 +19,33 @@
  * hold():void,release():void,
  * beginDrag(body:B,position:Vector,local:Vector,stiffness:number,damping:number):{move(position:Vector):void,end():void},
  * pin(body:B):()=>void,
+ * updateCouplings():void,
  * remove():void
  * }} RapierAsset */
 
 import {Quaternion, Vector3} from 'three';
 import {shiftInertiaToCenterOfMass} from './massProperties.js';
+
+/** The drive a coupled joint uses when it has none: stiff and critically damped, independent of mass. */
+/** @type {import('./description.js').DriveDescription} */
+const couplingDrive = {model: 'acceleration', stiffness: 2000, damping: 2 * Math.sqrt(2000), targetPosition: 0, targetVelocity: 0};
+
+/**
+ * A revolute joint's angle (radians) or a prismatic joint's slide distance, measured from the
+ * bodies' poses and the joint frames. Needle Engine's backends measure it the same way.
+ * @param {import('./description.js').JointDescription} joint @param {RigidBody} body0 @param {RigidBody} body1
+ */
+function jointPosition(joint, body0, body1) {
+    const axis = new Vector3().copy(joint.axis).normalize();
+    const frame0 = quat(body0.rotation()).multiply(quat(joint.rotation0)), frame1 = quat(body1.rotation()).multiply(quat(joint.rotation1));
+    if (joint.type === 'revolute') {
+        const relative = frame0.clone().invert().multiply(frame1);
+        return 2 * Math.atan2(new Vector3(relative.x, relative.y, relative.z).dot(axis), relative.w);
+    }
+    const anchor0 = new Vector3().copy(joint.anchor0).applyQuaternion(quat(body0.rotation())).add(body0.translation());
+    const anchor1 = new Vector3().copy(joint.anchor1).applyQuaternion(quat(body1.rotation())).add(body1.translation());
+    return anchor1.sub(anchor0).dot(axis.applyQuaternion(frame0));
+}
 
 /** @param {Vector|undefined} value */
 const vec = value => ({x: value?.x ?? 0, y: value?.y ?? 0, z: value?.z ?? 0});
@@ -56,6 +78,8 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
     const joints = new Map();
     /** @type {Map<string,{model:'force'|'acceleration',stiffness:number,damping:number}>} */
     const drives = new Map();
+    /** @type {Map<string,[B,B]>} */
+    const jointBodies = new Map();
     /** @type {import('./description.js').Adaptation[]} */
     const adaptations = description.articulations.map(articulation => ({
         path: articulation.id, source: 'reduced-coordinate articulation', target: 'impulse constraints',
@@ -204,7 +228,8 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             }
             joint.setContactsEnabled(item.collisionEnabled);
             if (item.limits && joint.setLimits) joint.setLimits(item.limits.lower, item.limits.upper);
-            const drive = item.drive;
+            // A coupled joint follows its leader with a drive. Without an authored drive it gets a stiff one.
+            const drive = item.drive ?? (item.coupling ? couplingDrive : undefined);
             if (drive && joint.configureMotor) {
                 if (drive.maxForce !== undefined) {
                     if (joint.setMotorMaxForce) joint.setMotorMaxForce(drive.maxForce);
@@ -216,12 +241,37 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
                 drives.set(item.id, drive);
             }
             joints.set(item.id, joint);
+            jointBodies.set(item.id, [b0, b1]);
         }
         if (jointSolver === 'hybrid') for (const item of adaptations) if (item.source === 'reduced-coordinate articulation') {
             item.target = 'reduced-coordinate fixed links with impulse motion joints';
             item.reason = 'Fixed links use reduced coordinates; authored movable joint frames, limits, drives and collision filters use impulse constraints.';
         }
     } catch (error) { remove(); throw error; }
+
+    // Couplings: after each step, drive the follower toward the leader's position × multiplier + offset.
+    /** @type {Array<{follower:string,leader:import('./description.js').JointDescription,coupling:{joint:string,multiplier:number,offset:number},target:number}>} */
+    const couplings = [];
+    for (const item of description.joints) {
+        const leader = item.coupling && description.joints.find(joint => joint.id === item.coupling?.joint);
+        if (!item.coupling || !leader || !joints.has(item.id) || !jointBodies.has(leader.id)) continue;
+        couplings.push({follower: item.id, leader, coupling: item.coupling, target: NaN});
+        adaptations.push({path: item.id, source: 'joint coupling', target: "drive toward the leader's position",
+            reason: 'Rapier has no gear or mimic constraint, so the follower is driven toward the leader after each step and lags slightly under load.'});
+    }
+    const updateCouplings = () => {
+        for (const coupling of couplings) {
+            const [body0, body1] = /** @type {[B,B]} */ (jointBodies.get(coupling.leader.id));
+            if (!world.bodies.contains(body0.handle) || !world.bodies.contains(body1.handle)) continue;
+            const target = jointPosition(coupling.leader, body0, body1) * coupling.coupling.multiplier + coupling.coupling.offset;
+            // Changing the target wakes the bodies, so only send real changes and let the mechanism sleep.
+            if (Math.abs(target - coupling.target) < 1e-5) continue;
+            coupling.target = target;
+            const joint = joints.get(coupling.follower), drive = drives.get(coupling.follower);
+            if (joint?.configureMotor && drive) joint.configureMotor(target, 0, drive.stiffness, drive.damping);
+        }
+    };
+    updateCouplings();
 
     /** @type {Map<B,{type:number,linear:Vector,angular:Vector,nextPosition:Vector,nextRotation:import('./rapier-types.js').Rotation,sleeping:boolean,enabled:boolean}>|null} */
     let held = null;
@@ -273,6 +323,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             body.setBodyType(R.RigidBodyType.Fixed, true);
             return () => { body.setBodyType(type, true); body.setLinvel(vec(undefined), true); body.setAngvel(vec(undefined), true); };
         },
+        updateCouplings,
         remove() { held = null; remove(); },
     };
 }

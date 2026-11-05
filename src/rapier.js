@@ -90,7 +90,6 @@ export function getSimulationLimitations(snapshot) {
     const issues=[...(snapshot.unsupported||[]),...getSnapshotIssues(snapshot)];
     for(const shape of snapshot.shapes||[])if(shape.collisionEnabled!==false && shape.type==='mesh' && shape.approximation && !['none','convexHull','sdf'].includes(shape.approximation))
         issues.push({path:shape.path,type:'mesh',reason:`Mesh approximation ${shape.approximation} is not supported.`});
-    for(const joint of snapshot.joints||[])if(joint.mimic)issues.push({path:joint.path,type:joint.type,reason:"Mimic joint coupling is not supported by this contact adapter."});
     return issues;
 }
 
@@ -189,10 +188,11 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
         visuals = binding;
         if(!allowPartial&&unsupported.length)throw new Error(`Simulation unavailable: ${unsupported[0].reason}`);
         if (worldContext?.isDisposed()) throw new Error('Simulation world is disposed.');
-        const sync=binding.sync;
-        unregister = worldContext?.register({hooks, sync});
-        if(worldContext){for(const body of ownedBodies)body.setEnabled(true);for(const collider of ownedColliders)collider.setEnabled(true);for(const {body,data}of bodies.values())if(data.startsAsleep)body.sleep();}
         const built = asset;
+        const sync=binding.sync;
+        // In a shared world, the host steps first and then calls each asset's sync.
+        unregister = worldContext?.register({hooks, sync: () => { built.updateCouplings(); sync(); }});
+        if(worldContext){for(const body of ownedBodies)body.setEnabled(true);for(const collider of ownedColliders)collider.setEnabled(true);for(const {body,data}of bodies.values())if(data.startsAsleep)body.sleep();}
         const runtime = createSimulationRuntime({snapshot, mode, bodies,
             joints: new Map([...description.jointData].filter(([path]) => built.joints.has(path))),
             binding, release, isReleased: () => released,
@@ -203,7 +203,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
                 pin: body => built.pin(body),
                 ...ownsWorld && {
                     /** @param {number} [dt] */
-                    step(dt) { if (dt !== undefined) world.timestep = dt; world.step(events, hooks); },
+                    step(dt) { if (dt !== undefined) world.timestep = dt; world.step(events, hooks); built.updateCouplings(); },
                     timestep: () => world.timestep,
                 },
             }});

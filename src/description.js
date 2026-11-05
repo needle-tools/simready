@@ -21,10 +21,12 @@
 /** @typedef {{id:string,type:'fixed'|'revolute'|'prismatic'|'spherical'|'distance'|'spring',body0?:string,body1?:string,
  * anchor0:Vector,rotation0:Rotation,anchor1:Vector,rotation1:Rotation,axis:Vector,limits?:{lower:number,upper:number},
  * drive?:DriveDescription,maxDistance?:number,spring?:{stiffness:number,damping:number,restLength?:number},
- * coneLimit?:number,breakForce?:number,breakTorque?:number,collisionEnabled:boolean,articulation?:string}} JointDescription */
+ * coneLimit?:number,breakForce?:number,breakTorque?:number,collisionEnabled:boolean,articulation?:string,
+ * coupling?:{joint:string,multiplier:number,offset:number}}} JointDescription */
 /** @typedef {{id:string,bodies:string[],solverIterations:number}} ArticulationDescription */
-/** What the target physics backend supports.
- * @typedef {{backend:string,shapes:ReadonlySet<string>,joints:ReadonlySet<string>,features:ReadonlySet<string>}} Capabilities */
+/** What the target physics backend supports. jointCoupling says whether joints can follow other joints.
+ * @typedef {{backend:string,shapes:ReadonlySet<string>,joints:ReadonlySet<string>,features:ReadonlySet<string>,
+ * jointCoupling?:'native'|'emulated'|'none'}} Capabilities */
 /** @typedef {{path:string,source:string,target:string,reason:string}} Adaptation */
 /** @typedef {{data:PhysicsShape,owner?:PhysicsBody}} ColliderData */
 /** @typedef {{
@@ -60,7 +62,8 @@ export function rapierCapabilities(R) {
     if (!R || R.ColliderDesc?.halfspace) shapes.add('plane');
     if (!R || R.ColliderDesc?.convexDecomposition && R.CompoundFlags) shapes.add('convexDecomposition');
     return {backend: 'rapier', shapes, joints: new Set(['fixed', 'revolute', 'prismatic', 'spherical', 'distance', 'spring']),
-        features: new Set(['jointLimits', 'jointDrives', 'driveForceLimits', 'accelerationDrives', 'collisionFilter', 'continuousCollision'])};
+        features: new Set(['jointLimits', 'jointDrives', 'driveForceLimits', 'accelerationDrives', 'collisionFilter', 'continuousCollision']),
+        jointCoupling: 'emulated'};
 }
 
 /**
@@ -181,7 +184,6 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
     for (const data of snapshot.joints || []) {
         if (data.jointEnabled === false) continue;
         if (data.body0 && !bodyData.has(data.body0) || data.body1 && !bodyData.has(data.body1)) { warn(data, 'A joint body is outside the selected simulation scene.'); continue; }
-        if (data.mimic && !capabilities.features.has('jointCoupling')) warn(data, 'Mimic joint coupling is not supported by this contact adapter.');
         /** @type {JointDescription} */
         const joint = {id: data.path, type: 'fixed', body0: data.body0 || undefined, body1: data.body1 || undefined,
             anchor0: vector(data.position0), rotation0: rotation(q(data.rotation0)), anchor1: vector(data.position1), rotation1: rotation(q(data.rotation1)),
@@ -225,7 +227,22 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
         }
         const articulation = articulationOf.get(data.path);
         if (articulation && !data.excludeFromArticulation) joint.articulation = articulation;
+        if (data.mimic) {
+            if ((capabilities.jointCoupling ?? 'none') === 'none') warn(data, 'Mimic joint coupling is not supported by this physics backend.');
+            else {
+                // Mimic uses snapshot units (degrees for revolute joints); descriptions use radians.
+                const leader = (snapshot.joints || []).find(item => item.path === data.mimic?.joint);
+                const followerUnit = unit, leaderUnit = leader?.type === 'revolute' ? Math.PI / 180 : 1;
+                joint.coupling = {joint: data.mimic.joint, multiplier: data.mimic.multiplier * followerUnit / leaderUnit, offset: data.mimic.offset * followerUnit};
+            }
+        }
         joints.push(joint); jointData.set(data.path, data);
+    }
+    // A follower whose leader was left out follows nothing.
+    for (const joint of joints) if (joint.coupling && !joints.some(item => item.id === joint.coupling?.joint && (item.type === 'revolute' || item.type === 'prismatic'))) {
+        const data = /** @type {PhysicsJoint} */ (jointData.get(joint.id));
+        warn(data, 'The mimic joint\'s leader is not simulated, so it moves freely.');
+        delete joint.coupling;
     }
 
     const groups = new Map((snapshot.groups || []).map(g => [g.path, g]));

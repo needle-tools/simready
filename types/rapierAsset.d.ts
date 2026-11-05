@@ -40,5 +40,6 @@ export type RapierAsset<B> = {
         end(): void;
     };
     pin(body: B): () => void;
+    updateCouplings(): void;
     remove(): void;
 };

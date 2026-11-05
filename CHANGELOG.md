@@ -5,6 +5,8 @@
 - Create Needle Engine dynamics with Engine's `physics.createAsset`. SimReady describes shapes, mass properties, joints, drives, articulations and collision filters; Engine creates the physics objects and their components. Requires a Needle Engine version with `physics.createAsset`.
 - Key Needle collider components by collider path. Needle asset bodies expose pose and velocity methods instead of raw Rapier bodies, and `world.capabilities` reports backend support.
 - Share snapshot interpretation and playback controls between the standalone Rapier and Needle adapters.
+- Simulate mimic joints: the follower is driven toward the leader's position after each step. Assets with mimic joints no longer count as unsupported.
+- Pass joint break thresholds and spherical cone limits to backends that support them.
 
 ## 0.1.0
 
