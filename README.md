@@ -109,9 +109,9 @@ This preserves Needle's other glTF import plugins and keeps SimReady registratio
 separate from the USD plugin. Loading an asset or creating a mechanism does not
 initialize Rapier.
 
-For dynamics instead of joint posing, use the Needle adapter. It initializes
-Needle's physics backend when needed and registers imported bodies and colliders
-through Engine's `registerExternalPhysics` API:
+For dynamics instead of joint posing, use the Needle adapter. It starts Needle's
+physics when needed and creates the asset's bodies, colliders and joints with
+Engine's `physics.createAsset`:
 
 ```js
 import {createNeedleSimulationWorld} from '@needle-tools/simready/needle';
@@ -120,20 +120,22 @@ const world = await createNeedleSimulationWorld({context});
 const assembly = await runtime.createSimulation({world, id: 'assembly', position: [0, 0, 0], rotation: [0, 0, 0, 1]});
 ```
 
-Needle steps the world and synchronizes the asset through its normal physics
-loop. Do not call `world.step()` or `assembly.update()` to advance this borrowed
-world. Keep the adapter on the owning component for as long as those assets are
-in use. Engine world teardown also disposes registered adapters before freeing
-the solver.
+Needle steps the physics and moves the asset in its normal update loop, so don't call
+`assembly.update()` or `assembly.step()`. Keep the adapter on the owning component for
+as long as the assets are in use. When Engine clears its physics world, it disposes the
+adapter's assets first.
 
-Engine owns component identity, queries, collision callbacks and lifecycle for
-these imported physics objects. The package supplies raw Rapier objects and
-visual identities; it does not construct Engine components. `assembly.rigidbodies`
-maps authored body paths to the Engine representations, and
-`assembly.colliderComponents` maps Rapier collider handles to theirs. Instanced
-or ambiguous visual bindings receive independent Engine objects. Reset keeps
-those identities; unloading releases the registration before the imported raw
-objects. Standalone Rapier and kinematics imports remain independent of Engine.
+SimReady converts the asset into a description in world units: shapes, USD mass
+values, joint frames, limits, drives, articulations and collision filters. Engine
+creates the physics objects and their components, and handles raycasts, collision
+callbacks and cleanup. `world.capabilities` shows what the current physics backend
+supports. Anything it can't simulate is listed in `assembly.unsupported`.
+
+`assembly.rigidbodies` and `assembly.colliderComponents` map body and collider paths
+to their Engine components. `assembly.bodies` has the same pose and velocity methods as
+the standalone adapter. Instanced or ambiguous render objects get their own Engine
+objects. Reset keeps the components; unloading removes the components and physics
+objects. Standalone Rapier and kinematics imports still don't need Engine.
 
 Explicitly disabling the Engine Rapier backend also disables this dynamics path; the adapter does not load a second runtime to override that choice.
 

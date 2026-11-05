@@ -32,13 +32,23 @@ export type SimreadyRuntime = {
     }>;
     createSimulation: CreateBoundSimulation;
 };
-export type CreateBoundSimulation = <B extends RigidBody, W extends import("./rapier-types.js").World<B>>(options: (Omit<import("./rapier.js").SimulationOptions<B, W>, "snapshot"> & {
-    world?: never;
-}) | ({
-    world: import("./rapier.js").SimulationWorld<W, B>;
-} & Omit<import("./rapier.js").WorldAssetOptions<B>, "snapshot">)) => Promise<import("./rapier.js").Simulation<W, B> & {
-    root: Object3D;
-}>;
+/**
+ * Create a standalone simulation, or add the asset to a shared SimReady or Needle world.
+ */
+export type CreateBoundSimulation = {
+    <B extends RigidBody, W extends import("./rapier-types.js").World<B>>(options: Omit<import("./rapier.js").SimulationOptions<B, W>, "snapshot"> & {
+        world?: never;
+    }): Promise<import("./rapier.js").Simulation<W, B> & {
+        root: Object3D;
+    }>;
+    <A extends {
+        dispose(): void;
+    }>(options: {
+        world: import("./rapier.js").SimulationHost<A>;
+    } & Omit<import("./rapier.js").HostAssetOptions, "snapshot" | "bindVisuals">): Promise<A & {
+        root: Object3D;
+    }>;
+};
 export type SimreadyParser = {
     json: {
         extensions?: Record<string, unknown>;

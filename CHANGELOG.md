@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Create Needle Engine dynamics with Engine's `physics.createAsset`. SimReady describes shapes, mass properties, joints, drives, articulations and collision filters; Engine creates the physics objects and their components. Requires a Needle Engine version with `physics.createAsset`.
+- Key Needle collider components by collider path. Needle asset bodies expose pose and velocity methods instead of raw Rapier bodies, and `world.capabilities` reports backend support.
+- Share snapshot interpretation and playback controls between the standalone Rapier and Needle adapters.
+
 ## 0.1.0
 
 - Specify the NEEDLE_simready glTF extension with JSON Schemas, examples and interoperability guidance.

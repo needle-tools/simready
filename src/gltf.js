@@ -12,10 +12,13 @@
  * readonly bindings:ObjectBinding[],readonly mappingIssues:PhysicsIssue[],
  * createMechanism(options?:Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>):Promise<Mechanism&{root:Object3D}>,
  * createSimulation:CreateBoundSimulation}} SimreadyRuntime */
-/** @typedef {<B extends RigidBody,W extends import('./rapier-types.js').World<B>>(options:
- * (Omit<import('./rapier.js').SimulationOptions<B,W>,'snapshot'>&{world?:never})|
- * ({world:import('./rapier.js').SimulationWorld<W,B>}&Omit<import('./rapier.js').WorldAssetOptions<B>,'snapshot'>))=>
- * Promise<import('./rapier.js').Simulation<W,B>&{root:Object3D}>} CreateBoundSimulation */
+/** Create a standalone simulation, or add the asset to a shared SimReady or Needle world.
+ * @typedef {{
+ * <B extends RigidBody,W extends import('./rapier-types.js').World<B>>(options:Omit<import('./rapier.js').SimulationOptions<B,W>,'snapshot'>&{world?:never}):
+ * Promise<import('./rapier.js').Simulation<W,B>&{root:Object3D}>;
+ * <A extends {dispose():void}>(options:{world:import('./rapier.js').SimulationHost<A>}&Omit<import('./rapier.js').HostAssetOptions,'snapshot'|'bindVisuals'>):
+ * Promise<A&{root:Object3D}>;
+ * }} CreateBoundSimulation */
 /** @typedef {{json:{extensions?:Record<string,unknown>,nodes?:unknown[],meshes?:{primitives:{mode?:number}[]}[]},
  * getDependency(type:string,index:number):Promise<unknown>}} SimreadyParser */
 /** @typedef {{scene:Object3D,userData?:Record<string,unknown>}} SimreadyLoadResult */
@@ -107,11 +110,9 @@ export class NeedleSimreadyLoaderPlugin{
    const{createMechanism}=await import('./kinematics.js');
    return Object.assign(await createMechanism({...options,snapshot:fromGltfPhysicsSnapshot(snapshot),bindVisuals:bind(false)}),{root});
   });}
-  /** @template {RigidBody} B
-   * @template {import('./rapier-types.js').World<B>} W
-   * @param {(Omit<import('./rapier.js').SimulationOptions<B,W>,'snapshot'> & {world?:never}) |
-   * ({world:import('./rapier.js').SimulationWorld<W,B>} & Omit<import('./rapier.js').WorldAssetOptions<B>,'snapshot'>)} options
-   * @returns {Promise<import('./rapier.js').Simulation<W,B> & {root:Object3D}>}
+  /** @param {(Omit<import('./rapier.js').SimulationOptions,'snapshot'> & {world?:never}) |
+   * ({world:import('./rapier.js').SimulationHost<{dispose():void}>} & Omit<import('./rapier.js').HostAssetOptions,'snapshot'|'bindVisuals'>)} options
+   * @returns {Promise<{dispose():void,root:Object3D}>}
    */
   async function createBoundSimulation(options){return withVisualController(root,async()=>{
    if(options.world){
@@ -121,12 +122,13 @@ export class NeedleSimreadyLoaderPlugin{
     }catch(error){placement.reset();throw error;}
    }
    const{createSimulation}=await import('./rapier.js');
-   /** @type {import('./rapier.js').SimulationOptions<B,W>} */
+   /** @type {import('./rapier.js').SimulationOptions} */
    const simulationOptions={...options,snapshot:fromGltfPhysicsSnapshot(snapshot),bindVisuals:bind(false)};
    return Object.assign(await createSimulation(simulationOptions),{root});
   });}
   result.userData||={};
-  const runtime={snapshot,usdMetadata:metadata,root,bindings:ownedBindings,mappingIssues,createMechanism:createBoundMechanism,createSimulation:createBoundSimulation};
+  const runtime={snapshot,usdMetadata:metadata,root,bindings:ownedBindings,mappingIssues,createMechanism:createBoundMechanism,
+   createSimulation:/** @type {CreateBoundSimulation} */ (/** @type {unknown} */ (createBoundSimulation))};
   result.userData.simready=runtime;
   runtimes.set(result.scene,runtime);runtimes.set(result,runtime);runtimes.set(runtime,runtime);
  }

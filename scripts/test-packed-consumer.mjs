@@ -78,7 +78,7 @@ if(engineTarball)await appendFile(join(root,'consumer.ts'),`
 import {createNeedleSimulationWorld} from '@needle-tools/simready/needle';
 declare const context:import('@needle-tools/engine').Context;
 const needle=await createNeedleSimulationWorld({context});
-needle.world.timestep=1/60;needle.dispose();
+const backend:string=needle.capabilities.backend;void backend;needle.dispose();
 `);
 if(engineTarball){
  const args=['--no-install','tsc','--noEmit','--strict','--module','ESNext','--moduleResolution','Bundler','--target','ES2022','--lib','ES2022,DOM,ESNext.Disposable','consumer.ts'];
