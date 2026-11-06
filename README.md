@@ -24,6 +24,9 @@ core-shape draft.
 The [USD export guide](docs/usd-export.md) covers converting a composed stage,
 preserving its simulation data, and loading the result in a glTF application.
 
+The [USD coupling metadata codec](docs/usd-metadata.md) shares the existing Needle USD
+joint relationship convention between writers and readers without a USD runtime dependency.
+
 ## Three.js
 
 Register the extension on your `GLTFLoader` before loading a SimReady GLB. In an

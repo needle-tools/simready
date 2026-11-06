@@ -40,7 +40,11 @@
       "types": "./types/needle.d.ts",
       "import": "./src/needle.js"
     },
-    "./schema/*": "./extensions/NEEDLE_simready/schema/*"
+    "./schema/*": "./extensions/NEEDLE_simready/schema/*",
+    "./usd": {
+      "types": "./types/usd.d.ts",
+      "import": "./src/usd.js"
+    }
   },
   "scripts": {
     "examples:build": "node scripts/build-extension-examples.mjs",
@@ -62,6 +66,7 @@
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
     "@needle-tools/engine": "^6.0.0-alpha.7",
+    "@playwright/test": "^1.65.0",
     "@types/three": "^0.185.1",
     "ajv": "^8.20.0",
     "gltf-validator": "^2.0.0-dev.3.10",

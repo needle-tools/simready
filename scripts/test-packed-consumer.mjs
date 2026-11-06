@@ -20,12 +20,21 @@ result.dependencies=run(root,'npm',['ls','three','@needle-tools/simready',...(en
 const probe=`import {createSimreadyExtension} from '@needle-tools/simready';
 import {registerSimreadyLoader,toGltfPhysicsSnapshot} from '@needle-tools/simready/gltf';
 import {createSimulationWorld} from '@needle-tools/simready/rapier';
+import {encodeUsdJointMetadata,decodeUsdJointMetadata} from '@needle-tools/simready/usd';
+import {createMechanism} from '@needle-tools/simready/kinematics';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import R from '@dimforge/rapier3d-compat';
 const check=(value,message)=>{if(!value)throw new Error(message);};
 export async function probe(){
  await R.init();
  const q=[0,0,0,1],snapshot={metersPerUnit:1,kilogramsPerUnit:1,upAxis:'Y',bodies:[{path:'/Body',position:[0,3,0],rotation:q,scale:[1,1,1],mass:2,rigidBodyEnabled:true}],shapes:[{path:'/Shape',body:'/Body',type:'cube',halfExtents:[.5,.5,.5],position:[0,0,0],rotation:q}],joints:[],materials:[],groups:[],scenes:[],unsupported:[]};
+ const mimic={joint:'/Input',multiplier:-2,offset:15};
+ const metadata=encodeUsdJointMetadata({mimic},path=>'/Export'+path);
+ const decoded=decodeUsdJointMetadata(Object.fromEntries(metadata.attributes.map(a=>[a.name,a.value])),Object.fromEntries(metadata.relationships.map(r=>[r.name,r.targets])));
+ check(decoded.joint==='/Export/Input'&&decoded.multiplier===-2&&decoded.offset===15,'USD metadata lost coupling');
+ const rotor={...snapshot,joints:[{path:'/Input',type:'revolute',body0:'',body1:'/Body',axis:'Z',localPos0:[0,3,0],localPos1:[0,0,0],localRot0:q,localRot1:q,limit:{lower:-7200,upper:7200}}]};
+ const pose=await createMechanism({snapshot:rotor});
+ try{check(Math.abs(pose.getJointValue('/Input'))<1e-6,'wide limits changed the resting turn');pose.setJointValue('/Input',1080);check(Math.abs(pose.getJointValue('/Input')-1080)<1e-6,'multi-turn pose lost rotations');}finally{pose.dispose();}
  const extension=createSimreadyExtension({snapshot:toGltfPhysicsSnapshot(snapshot),stageNode:0,bindings:[{node:1,path:'/Body'}]});
  const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1]},{translation:[0,3,0]}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:extension}};
  const result=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(json),'');
@@ -63,8 +72,12 @@ await writeFile(join(root,'node.mjs'),"import {probe} from './probe.js';\nimport
 result.node=JSON.parse(run(root,'node',['node.mjs']).trim());
 await writeFile(join(root,'consumer.ts'),`import R from '@dimforge/rapier3d-compat';
 import {createSimulationWorld} from '@needle-tools/simready/rapier';
+import {encodeUsdJointMetadata,decodeUsdJointMetadata} from '@needle-tools/simready/usd';
+import {createMechanism} from '@needle-tools/simready/kinematics';
 import {registerSimreadyLoader,toGltfPhysicsSnapshot} from '@needle-tools/simready/gltf';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const encoded=encodeUsdJointMetadata({mimic:{joint:'/Input',multiplier:2,offset:0}});
+const decoded=decodeUsdJointMetadata({},{});void encoded;void decoded;
 const host=createSimulationWorld({rapier:R});host.world.timestep=1/120;
 const external=new R.World({x:0,y:-9.81,z:0});
 const borrowed=createSimulationWorld({rapier:R,world:external,registerWorldExtension:extension=>{
