@@ -264,7 +264,9 @@ turns, including travel beyond 360 degrees. Each hinge must rotate by less than
 180 degrees between physics samples; choose the physics timestep accordingly.
 Borrowed hosts must call the adapter after every physics step so turns are not
 lost. Angular hard stops that cross the principal-angle seam require a Rapier
-adapter with joint local-frame setters.
+adapter with joint local-frame setters (available in Rapier 0.21; absent in
+0.19.3). Backends without these setters reject those assets by default;
+`allowPartial: true` returns an unsupported-feature diagnostic.
 
 `addAsset` converts source units and
 up axes to the world's Y-up frame. `position` and quaternion `rotation` set the

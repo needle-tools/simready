@@ -69,3 +69,29 @@ for (const axis of ['X', 'Y']) test(`seam recentering preserves rotated ${axis} 
         }
     } finally { sim.dispose(); }
 });
+
+test('adapters without frame setters reject seam limits unless partial simulation is explicit', async () => {
+    const prototype = R.ImpulseJoint.prototype;
+    const frame1 = prototype.setLocalFrame1, frame2 = prototype.setLocalFrame2;
+    prototype.setLocalFrame1 = undefined;
+    prototype.setLocalFrame2 = undefined;
+    try {
+        for (const shared of [false, true]) {
+            const snapshot = offsetRotorSnapshot(1);
+            snapshot.bodies[0].rotation = [0, 0, 1, 0];
+            snapshot.joints[0].limit = {enabled: true, lower: 170, upper: 190};
+            const world = shared ? createSimulationWorld({rapier: R, gravity: [0, 0, 0]}) : null;
+            const create = allowPartial => world ? world.addAsset({snapshot, allowPartial}) : createSimulation({rapier: R, snapshot, allowPartial});
+            try {
+                await assert.rejects(create(false), /Angular limits crossing the principal-angle seam require Rapier local-frame setters/);
+                const sim = await create(true);
+                try {
+                    assert.ok(sim.unsupported.some(item => item.path === '/Motor' && item.reason.includes('local-frame setters')));
+                } finally { sim.dispose(); }
+            } finally { world?.dispose(); }
+        }
+    } finally {
+        prototype.setLocalFrame1 = frame1;
+        prototype.setLocalFrame2 = frame2;
+    }
+});
