@@ -93,7 +93,11 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
    const relative=a.clone().invert().multiply(b),p=new Vector3(),q=new Quaternion();relative.decompose(p,q,new Vector3());
    let value=0;
    if(dof!==null){const v=axis(data.axis);value=angular?2*Math.atan2(new Vector3(q.x,q.y,q.z).dot(v),q.w):p.dot(v);
-    if(angular&&data.limit?.enabled&&typeof data.limit.lower==='number'&&typeof data.limit.upper==='number'&&Number.isFinite(data.limit.lower)&&Number.isFinite(data.limit.upper))value+=Math.round((((data.limit.lower+data.limit.upper)/2)*Math.PI/180*sign-value)/(2*Math.PI))*2*Math.PI;
+    if(angular&&data.limit?.enabled&&typeof data.limit.lower==='number'&&typeof data.limit.upper==='number'&&Number.isFinite(data.limit.lower)&&Number.isFinite(data.limit.upper)) {
+     const degrees=value*180/Math.PI*sign;
+     const first=Math.ceil((data.limit.lower-degrees-1e-5)/360),last=Math.floor((data.limit.upper-degrees+1e-5)/360);
+     if(first<=last)value+=Math.max(first,Math.min(last,0))*2*Math.PI*sign;
+    }
     joint.setDoFValue(dof,value);}
    record.initial=value*sign*(angular?180/Math.PI:1);
    if(data.limit?.enabled){record.lower=typeof data.limit.lower==='number'&&Number.isFinite(data.limit.lower)?data.limit.lower:-Infinity;record.upper=typeof data.limit.upper==='number'&&Number.isFinite(data.limit.upper)?data.limit.upper:Infinity;}
