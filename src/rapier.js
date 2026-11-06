@@ -198,6 +198,7 @@ export async function createSimulation({ rapier: R, snapshot, scenePath, mode = 
             binding, release, isReleased: () => released,
             backend: {
                 hold: () => built.hold(), release: () => built.release(),
+                jointPosition:path=>built.jointPosition(path),resetCoordinates:()=>{built.resetCoordinates();built.updateCouplings();},
                 setDriveTarget: (path, position, velocity) => built.setDriveTarget(path, position, velocity),
                 beginDrag: (body, position, local, stiffness, damping) => built.beginDrag(body, position, local, stiffness, damping),
                 pin: body => built.pin(body),

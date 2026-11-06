@@ -41,5 +41,7 @@ export type RapierAsset<B> = {
     };
     pin(body: B): () => void;
     updateCouplings(): void;
+    jointPosition(path: string): number | null;
+    resetCoordinates(): void;
     remove(): void;
 };

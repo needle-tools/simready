@@ -20,6 +20,7 @@
  * beginDrag(body:B,position:Vector,local:Vector,stiffness:number,damping:number):{move(position:Vector):void,end():void},
  * pin(body:B):()=>void,
  * updateCouplings():void,
+ * jointPosition(path:string):number|null,resetCoordinates():void,
  * remove():void
  * }} RapierAsset */
 
@@ -28,7 +29,7 @@ import {shiftInertiaToCenterOfMass} from './massProperties.js';
 
 /** The drive a coupled joint uses when it has none: stiff and critically damped, independent of mass. */
 /** @type {import('./description.js').DriveDescription} */
-const couplingDrive = {model: 'acceleration', stiffness: 2000, damping: 2 * Math.sqrt(2000), targetPosition: 0, targetVelocity: 0};
+const couplingDrive = {model: 'acceleration', stiffness: 200000, damping: 2 * Math.sqrt(200000), targetPosition: 0, targetVelocity: 0};
 
 /**
  * A revolute joint's angle (radians) or a prismatic joint's slide distance, measured from the
@@ -76,7 +77,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
     const colliders = new Map();
     /** @type {Map<string,Joint>} */
     const joints = new Map();
-    /** @type {Map<string,{model:'force'|'acceleration',stiffness:number,damping:number}>} */
+    /** @type {Map<string,import('./description.js').DriveDescription>} */
     const drives = new Map();
     /** @type {Map<string,[B,B]>} */
     const jointBodies = new Map();
@@ -227,7 +228,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
                 joint.setLocalFrame2(a1, quat(r1).multiply(basis));
             }
             joint.setContactsEnabled(item.collisionEnabled);
-            if (item.limits && joint.setLimits) joint.setLimits(item.limits.lower, item.limits.upper);
+            if (item.limits && joint.setLimits && item.type !== 'revolute') joint.setLimits(item.limits.lower, item.limits.upper);
             // A coupled joint follows its leader with a drive. Without an authored drive it gets a stiff one.
             const drive = item.drive ?? (item.coupling ? couplingDrive : undefined);
             if (drive && joint.configureMotor) {
@@ -249,6 +250,49 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
         }
     } catch (error) { remove(); throw error; }
 
+    // Track the continuous coordinate on every physics step, independently of
+    // queries. Quaternion signs and whole turns do not change this coordinate.
+    /** @param {number} value */
+    const wrap = value => Math.atan2(Math.sin(value), Math.cos(value));
+    const descriptions = new Map(description.joints.map(item => [item.id,item]));
+    /** @type {Map<string,{phase:number,value:number}>} */
+    const coordinates = new Map();
+    const sampleCoordinates = () => {
+        for (const item of description.joints) {
+            const pair=jointBodies.get(item.id);
+            if (!pair || item.type !== 'revolute') continue;
+            const phase=wrap(jointPosition(item,...pair)), previous=coordinates.get(item.id);
+            let value=previous ? previous.value+wrap(phase-previous.phase) : phase;
+            if(!previous && item.limits) {
+                const turn=2*Math.PI,first=Math.ceil((item.limits.lower-phase-1e-8)/turn),last=Math.floor((item.limits.upper-phase+1e-8)/turn);
+                if(first<=last)value+=Math.max(first,Math.min(last,0))*turn;
+            }
+            coordinates.set(item.id,{phase,value});
+        }
+    };
+    const resetCoordinates = () => { coordinates.clear(); sampleCoordinates(); };
+    resetCoordinates();
+    /** @param {string} path */
+    const measuredPosition = path => {
+        const item=descriptions.get(path),pair=jointBodies.get(path);
+        if (!item || !pair) return null;
+        return coordinates.get(path)?.value ?? jointPosition(item,...pair);
+    };
+    /** @type {Map<string,number[]>} */
+    const configuredDrives=new Map();
+    /** @param {string} path @param {import('./description.js').DriveDescription} drive */
+    const configureDrive = (path,drive) => {
+        const item=descriptions.get(path),joint=joints.get(path),coordinate=coordinates.get(path);
+        if (!joint?.configureMotor || !item) return;
+        // Rapier's angular motor operates in a principal-angle chart. Keep its
+        // target local while the authored target remains an accumulated angle.
+        const position=drive.stiffness===0 ? 0 : coordinate ? wrap(coordinate.phase+Math.max(-Math.PI/2,Math.min(Math.PI/2,drive.targetPosition-coordinate.value))) : drive.targetPosition;
+        const values=[position,drive.targetVelocity,drive.stiffness,drive.damping],previous=configuredDrives.get(path);
+        if(previous && values.every((value,i)=>Math.abs(value-previous[i])<1e-7))return;
+        configuredDrives.set(path,values);
+        joint.configureMotor(position,drive.targetVelocity,drive.stiffness,drive.damping);
+    };
+
     // Couplings: after each step, drive the follower toward the leader's position × multiplier + offset.
     /** @type {Array<{follower:string,leader:import('./description.js').JointDescription,coupling:{joint:string,multiplier:number,offset:number},target:number}>} */
     const couplings = [];
@@ -259,23 +303,42 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
         adaptations.push({path: item.id, source: 'joint coupling', target: "drive toward the leader's position",
             reason: 'Rapier has no gear or mimic constraint, so the follower is driven toward the leader after each step and lags slightly under load.'});
     }
+    /** @type {Map<string,number[]>} */
+    const configuredLimits=new Map();
     const updateCouplings = () => {
+        sampleCoordinates();
+        // Move the native limit window with the active principal-angle chart.
+        // Far from an endpoint, [-pi,pi] leaves the hinge unrestricted; near an
+        // endpoint the same native constraint enforces the accumulated bound.
+        for (const [path,coordinate] of coordinates) {
+            const item=descriptions.get(path),joint=joints.get(path);
+            if(item?.limits && joint?.setLimits) {
+                /** @param {number} value */
+                const clamp=value=>Math.max(-Math.PI,Math.min(Math.PI,value));
+                const limits=[clamp(coordinate.phase+item.limits.lower-coordinate.value),
+                    clamp(coordinate.phase+item.limits.upper-coordinate.value)],previous=configuredLimits.get(path);
+                if(!previous || limits.some((value,i)=>Math.abs(value-previous[i])>1e-9)) {
+                    joint.setLimits(limits[0],limits[1]);configuredLimits.set(path,limits);
+                }
+            }
+        }
         // Rapier's sleep threshold can exceed a commanded motor speed. Keep powered
         // endpoints awake while velocity is requested; a stopped motor may sleep normally.
-        for (const [path, drive] of drives) if (drive.targetVelocity !== 0) {
+        for (const [path, drive] of drives) if (drive.targetVelocity !== 0 || drive.stiffness > 0 && Math.abs(drive.targetPosition-(measuredPosition(path) ?? drive.targetPosition)) > 1e-4) {
             for (const body of jointBodies.get(path) || [])
                 if (world.bodies.contains(body.handle) && body.isDynamic()) body.wakeUp();
         }
         for (const coupling of couplings) {
             const [body0, body1] = /** @type {[B,B]} */ (jointBodies.get(coupling.leader.id));
             if (!world.bodies.contains(body0.handle) || !world.bodies.contains(body1.handle)) continue;
-            const target = jointPosition(coupling.leader, body0, body1) * coupling.coupling.multiplier + coupling.coupling.offset;
+            const target = (measuredPosition(coupling.leader.id) ?? 0) * coupling.coupling.multiplier + coupling.coupling.offset;
             // Changing the target wakes the bodies, so only send real changes and let the mechanism sleep.
             if (Math.abs(target - coupling.target) < 1e-5) continue;
             coupling.target = target;
             const joint = joints.get(coupling.follower), drive = drives.get(coupling.follower);
-            if (joint?.configureMotor && drive) joint.configureMotor(target, 0, drive.stiffness, drive.damping);
+            if (joint?.configureMotor && drive) drives.set(coupling.follower,{...drive,targetPosition:target,targetVelocity:0});
         }
+        for (const [path,drive] of drives) configureDrive(path,drive);
     };
     updateCouplings();
 
@@ -283,12 +346,15 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
     let held = null;
     return {
         bodies, colliders, joints, adaptations, ownedBodies, ownedColliders,
+        jointPosition:measuredPosition,
+        resetCoordinates(){resetCoordinates();for(const coupling of couplings)coupling.target=NaN;},
         get jointSolver() { return jointSolver; },
         setDriveTarget(path, position, velocity) {
             const joint = joints.get(path), drive = drives.get(path);
             if (!joint?.configureMotor || !drive) return false;
-            joint.configureMotor(position, velocity, drive.stiffness, drive.damping);
-            drives.set(path, {...drive, targetPosition: position, targetVelocity: velocity});
+            const next={...drive,targetPosition:position,targetVelocity:velocity};
+            drives.set(path,next);configureDrive(path,next);
+            for (const body of jointBodies.get(path) || []) if(body.isDynamic())body.wakeUp();
             return true;
         },
         hold() {

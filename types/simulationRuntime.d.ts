@@ -72,6 +72,8 @@ export type RuntimeBody = {
 export type RuntimeBackend<B extends RuntimeBody> = {
     hold(): void;
     release(): void;
+    jointPosition?(path: string): number | null;
+    resetCoordinates?(): void;
     setDriveTarget(path: string, position: number, velocity: number): boolean;
     beginDrag(body: B, position: Vector, local: Vector, stiffness: number, damping: number): {
         move(position: Vector): void;

@@ -19,6 +19,7 @@
  * @template {RuntimeBody} B
  * @typedef {{
  * hold():void; release():void;
+ * jointPosition?(path:string):number|null; resetCoordinates?():void;
  * setDriveTarget(path:string,position:number,velocity:number):boolean;
  * beginDrag(body:B,position:Vector,local:Vector,stiffness:number,damping:number):{move(position:Vector):void,end():void};
  * pin?(body:B):()=>void;
@@ -82,6 +83,7 @@ export function createSimulationRuntime({snapshot, mode, bodies, joints, backend
             record.drive = {...record.data.drive};
             applyDrive(path, record.drive);
         }
+        backend.resetCoordinates?.();
         pauseBodies();
         binding.reset();
     }
@@ -110,7 +112,12 @@ export function createSimulationRuntime({snapshot, mode, bodies, joints, backend
         },
         reset,
         /** @param {string} path */
-        getJointValue(path) { const record = controls.get(path); return !gone() && record ? jointValue(record.data, bodies) : null; },
+        getJointValue(path) {
+            const record=controls.get(path);
+            if(gone() || !record)return null;
+            const coordinate=backend.jointPosition?.(path);
+            return coordinate == null ? jointValue(record.data,bodies) : coordinate/unitOf(record.data);
+        },
         /** @param {string} path @param {{position?:number,velocity?:number}} [target] */
         setJointTarget(path, {position, velocity} = {}) {
             const record = controls.get(path);
