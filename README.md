@@ -259,7 +259,14 @@ plugin, or `removeUsdPlugin()` when unregistering the USD plugin.
 | Owned simulation world | World units, metres by default | `world.step(dt)` |
 | Borrowed world, including Needle | Host world units | Host physics loop |
 
-Hinge values and motor targets use degrees. `addAsset` converts source units and
+Hinge values and motor targets use degrees. Dynamics reports accumulated hinge
+turns, including travel beyond 360 degrees. Each hinge must rotate by less than
+180 degrees between physics samples; choose the physics timestep accordingly.
+Borrowed hosts must call the adapter after every physics step so turns are not
+lost. Angular hard stops that cross the principal-angle seam require a Rapier
+adapter with joint local-frame setters.
+
+`addAsset` converts source units and
 up axes to the world's Y-up frame. `position` and quaternion `rotation` set the
 asset's world placement; defaults are the origin and identity. glTF attachment
 replaces the asset root transform and restores it on disposal. Asset paths are

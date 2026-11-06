@@ -280,13 +280,20 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
     };
     /** @type {Map<string,number[]>} */
     const configuredDrives=new Map();
+    // A native hinge frame can be rotated around its free axis without changing
+    // the physical constraint. Keep that angular chart centered on the sampled
+    // coordinate so limits never acquire an artificial stop at +pi or -pi.
+    /** @type {Map<string,number>} */
+    const chartCenters=new Map();
+    const chartUnavailable=new Set();
     /** @param {string} path @param {import('./description.js').DriveDescription} drive */
     const configureDrive = (path,drive) => {
         const item=descriptions.get(path),joint=joints.get(path),coordinate=coordinates.get(path);
         if (!joint?.configureMotor || !item) return;
         // Rapier's angular motor operates in a principal-angle chart. Keep its
         // target local while the authored target remains an accumulated angle.
-        const position=drive.stiffness===0 ? 0 : coordinate ? wrap(coordinate.phase+Math.max(-Math.PI/2,Math.min(Math.PI/2,drive.targetPosition-coordinate.value))) : drive.targetPosition;
+        const center=chartCenters.get(path) ?? (coordinate ? coordinate.value-coordinate.phase : 0);
+        const position=drive.stiffness===0 ? 0 : coordinate ? wrap(coordinate.value-center+Math.max(-Math.PI/2,Math.min(Math.PI/2,drive.targetPosition-coordinate.value))) : drive.targetPosition;
         const values=[position,drive.targetVelocity,drive.stiffness,drive.damping],previous=configuredDrives.get(path);
         if(previous && values.every((value,i)=>Math.abs(value-previous[i])<1e-7))return;
         configuredDrives.set(path,values);
@@ -307,16 +314,30 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
     const configuredLimits=new Map();
     const updateCouplings = () => {
         sampleCoordinates();
-        // Move the native limit window with the active principal-angle chart.
-        // Far from an endpoint, [-pi,pi] leaves the hinge unrestricted; near an
-        // endpoint the same native constraint enforces the accumulated bound.
+        // Re-center the native frame before configuring motors or limits. Sampling
+        // remains in the original authored frames, so no turn is added or lost.
         for (const [path,coordinate] of coordinates) {
             const item=descriptions.get(path),joint=joints.get(path);
-            if(item?.limits && joint?.setLimits) {
+            if(!item || !joint)continue;
+            let center=coordinate.value-coordinate.phase;
+            if(joint.setLocalFrame1) {
+                const previous=chartCenters.get(path);
+                if(previous===undefined || Math.abs(coordinate.value-previous)>1e-7) {
+                    const basis=new Quaternion().setFromUnitVectors(new Vector3(1,0,0),new Vector3().copy(item.axis).normalize());
+                    const rotation=quat(item.rotation0).multiply(basis).multiply(new Quaternion().setFromAxisAngle(new Vector3(1,0,0),coordinate.phase));
+                    joint.setLocalFrame1(vec(item.anchor0),rotation);
+                    chartCenters.set(path,coordinate.value);
+                }
+                center=chartCenters.get(path) ?? center;
+            } else if(item.limits && (item.limits.lower < -Math.PI || item.limits.upper > Math.PI) && !chartUnavailable.has(path)) {
+                chartUnavailable.add(path);
+                warn(description.jointData.get(path) ?? {path},'Angular limits crossing the principal-angle seam require Rapier local-frame setters.');
+            }
+            if(item.limits && joint.setLimits) {
                 /** @param {number} value */
                 const clamp=value=>Math.max(-Math.PI,Math.min(Math.PI,value));
-                const limits=[clamp(coordinate.phase+item.limits.lower-coordinate.value),
-                    clamp(coordinate.phase+item.limits.upper-coordinate.value)],previous=configuredLimits.get(path);
+                const limits=[clamp(item.limits.lower-center),
+                    clamp(item.limits.upper-center)],previous=configuredLimits.get(path);
                 if(!previous || limits.some((value,i)=>Math.abs(value-previous[i])>1e-9)) {
                     joint.setLimits(limits[0],limits[1]);configuredLimits.set(path,limits);
                 }
