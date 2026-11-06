@@ -32,7 +32,7 @@ export async function probe(){
  const metadata=encodeUsdJointMetadata({mimic},path=>'/Export'+path);
  const decoded=decodeUsdJointMetadata(Object.fromEntries(metadata.attributes.map(a=>[a.name,a.value])),Object.fromEntries(metadata.relationships.map(r=>[r.name,r.targets])));
  check(decoded.joint==='/Export/Input'&&decoded.multiplier===-2&&decoded.offset===15,'USD metadata lost coupling');
- const rotor={...snapshot,joints:[{path:'/Input',type:'revolute',body0:'',body1:'/Body',axis:'Z',localPos0:[0,3,0],localPos1:[0,0,0],localRot0:q,localRot1:q,limit:{lower:-7200,upper:7200}}]};
+ const rotor={...snapshot,joints:[{path:'/Input',type:'revolute',body0:'',body1:'/Body',axis:'Z',position0:[0,3,0],position1:[0,0,0],rotation0:q,rotation1:q,limit:{lower:-7200,upper:7200}}]};
  const pose=await createMechanism({snapshot:rotor});
  try{check(Math.abs(pose.getJointValue('/Input'))<1e-6,'wide limits changed the resting turn');pose.setJointValue('/Input',1080);check(Math.abs(pose.getJointValue('/Input')-1080)<1e-6,'multi-turn pose lost rotations');}finally{pose.dispose();}
  const extension=createSimreadyExtension({snapshot:toGltfPhysicsSnapshot(snapshot),stageNode:0,bindings:[{node:1,path:'/Body'}]});
