@@ -1,6 +1,7 @@
 // @ts-check
 /** Official PhysX USD joint metadata. No USD or DOM runtime required. */
 export {prepareUsdPhysicsSnapshot} from './usdPlanning.js';
+export {getUsdJointState} from './usdJointState.js';
 
 export const USD_MIMIC_PROPERTIES = Object.freeze({
     joint: 'physxMimicJoint:rotX:referenceJoint',
@@ -22,19 +23,30 @@ function validateMimic(mimic) {
 /** Preserve follower = multiplier * leader + offset using the PhysxMimicJointAPI
  * constraint: follower + gearing * leader + offset = 0.
  * Values use the snapshot's source units and degrees, without a glTF conversion.
- * @param {Pick<import('./index.js').PhysicsJoint,'mimic'>} joint
+ * @param {Pick<import('./index.js').PhysicsJoint,'mimic'> & {type?:string,usdJointState?:{position:number,velocity:number}}} joint
  * @param {(path:string)=>string} [resolvePath] Remap source identities to exported prim paths.
  * @returns {UsdJointMetadata}
  */
 export function encodeUsdJointMetadata(joint, resolvePath = path => path) {
-    if (!joint.mimic) return {apiSchemas:[],attributes:[],relationships:[]};
+    /** @type {UsdJointMetadata} */
+    const state={apiSchemas:[],attributes:[],relationships:[]};
+    if(joint.usdJointState){
+        if(!['revolute','prismatic'].includes(joint.type||''))throw new TypeError('Scalar USD joint state requires a revolute or prismatic joint.');
+        const axis=joint.type==='prismatic'?'linear':'angular';
+        state.apiSchemas.push('PhysicsJointStateAPI:'+axis);
+        for(const key of /** @type {const} */(['position','velocity'])){
+            const value=joint.usdJointState[key];if(!Number.isFinite(value))throw new TypeError('USD joint state must be finite.');
+            state.attributes.push({name:'state:'+axis+':physics:'+key,type:'float',value});
+        }
+    }
+    if (!joint.mimic) return state;
     validateMimic(joint.mimic);
     if(joint.mimic.multiplier===0)throw new TypeError('PhysX mimic gearing must be nonzero.');
     const mimic={...joint.mimic,joint:resolvePath(joint.mimic.joint)};
     validateMimic(mimic);
     return {
-        apiSchemas:['PhysxMimicJointAPI:rotX'],
-        attributes:[
+        apiSchemas:[...state.apiSchemas,'PhysxMimicJointAPI:rotX'],
+        attributes:[...state.attributes,
             {name:'physxMimicJoint:rotX:referenceJointAxis',type:'uniform token',value:'rotX'},
             {name:USD_MIMIC_PROPERTIES.gearing,type:'float',value:-mimic.multiplier},
             {name:USD_MIMIC_PROPERTIES.offset,type:'float',value:-mimic.offset},

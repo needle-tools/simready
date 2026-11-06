@@ -20,7 +20,7 @@ test('native fields retain mixed angular/linear units and signed offsets at cent
     const source=screwSnapshot();source.metersPerUnit=.01;
     source.joints[1].mimic={joint:'/Motor',multiplier:.3/360,offset:2};
     const out=prepareUsdPhysicsSnapshot(source),record=out.joints[1],encoded=encodeUsdJointMetadata(record);
-    assert.deepEqual(encoded.apiSchemas,['PhysxMimicJointAPI:rotX']);
+    assert.deepEqual(encoded.apiSchemas,['PhysicsJointStateAPI:linear','PhysxMimicJointAPI:rotX']);
     const attrs=Object.fromEntries(encoded.attributes.map(a=>[a.name,a.value]));
     assert.equal(attrs['physxMimicJoint:rotX:gearing'],-.3/360);
     assert.equal(attrs['physxMimicJoint:rotX:offset'],-2);

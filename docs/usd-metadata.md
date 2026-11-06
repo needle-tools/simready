@@ -37,6 +37,20 @@ mimic combined with an independently authored drive can exert additional forces;
 Foundation driven-joint checks may reject nonzero follower gains. The planner does
 not silently remove those forces to satisfy a profile.
 
+Scalar joints retained in the planned articulation also receive `usdJointState`
+with a position and velocity measured from the actual authored body poses, joint
+frames and body velocities. The codec emits `PhysicsJointStateAPI:angular` or
+`:linear` with `state:<axis>:physics:position` and `:velocity`. It preserves a
+principal rest angle inside the limits and otherwise selects the nearest valid
+turn; a quaternion alone cannot recover an arbitrary historical turn count.
+`getUsdJointState(snapshot, joint)` exposes this measurement separately.
+
+For profile-oriented export, `prepareUsdPhysicsSnapshot(snapshot, {jointState:true})`
+also authors state for every enabled scalar joint, including uncoupled assets.
+The default only adds it to the planned mimic articulation; uncoupled core-only
+snapshots remain free of PhysX state APIs. State metadata alone does not create an
+articulation or certify that a runtime supports that joint.
+
 For grounded components needed by a coupling, the planner adds an identity rigid
 body (`usdSyntheticBase: true`) and a world fixed joint (`articulationRoot: true`).
 World endpoints become endpoints on that base with identical local frames. The

@@ -13,7 +13,11 @@ export function jointValue(data,bodies){
  if(data.type==='prismatic')return anchor(b,data.position1).sub(anchor(a,data.position0)).dot(direction.applyQuaternion(frame0));
  if(data.type==='revolute'){
   const relative=frame0.invert().multiply(frame1);let value=2*Math.atan2(new Vector3(relative.x,relative.y,relative.z).dot(direction),relative.w)*180/Math.PI;
-  if(data.limit?.enabled&&data.limit.lower!==null&&data.limit.upper!==null&&Number.isFinite(data.limit.lower)&&Number.isFinite(data.limit.upper))value+=Math.round(((data.limit.lower+data.limit.upper)/2-value)/360)*360;
+  value=((value+180)%360+360)%360-180;
+  if(data.limit?.enabled&&typeof data.limit.lower==='number'&&typeof data.limit.upper==='number'&&Number.isFinite(data.limit.lower)&&Number.isFinite(data.limit.upper)){
+   const first=Math.ceil((data.limit.lower-value-1e-5)/360),last=Math.floor((data.limit.upper-value+1e-5)/360);
+   if(first<=last)value+=Math.max(first,Math.min(last,0))*360;
+  }
   return value;
  }
  return null;

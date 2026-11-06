@@ -6,11 +6,18 @@
  * membership and kinematic/disabled links require an explicit caller adaptation.
  * The result describes a schema export, not Foundation profile certification.
  * @param {import('./index.js').PhysicsSnapshot} source
+ * @param {{jointState?:boolean}} [options] Author state for all enabled scalar joints, including uncoupled assets.
  * @returns {UsdPhysicsSnapshot}
  */
-export function prepareUsdPhysicsSnapshot(source: import("./index.js").PhysicsSnapshot): UsdPhysicsSnapshot;
+export function prepareUsdPhysicsSnapshot(source: import("./index.js").PhysicsSnapshot, { jointState }?: {
+    jointState?: boolean;
+}): UsdPhysicsSnapshot;
 export type UsdPhysicsJoint = import("./index.js").PhysicsJoint & {
     articulationRoot?: boolean;
+    usdJointState?: {
+        position: number;
+        velocity: number;
+    };
 };
 export type UsdPhysicsBody = import("./index.js").PhysicsBody & {
     usdSyntheticBase?: boolean;

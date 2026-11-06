@@ -1,7 +1,8 @@
 // @ts-check
 import {validateSnapshot, getSnapshotIssues} from './index.js';
+import {getUsdJointState} from './usdJointState.js';
 
-/** @typedef {import('./index.js').PhysicsJoint & {articulationRoot?:boolean}} UsdPhysicsJoint */
+/** @typedef {import('./index.js').PhysicsJoint & {articulationRoot?:boolean,usdJointState?:{position:number,velocity:number}}} UsdPhysicsJoint */
 /** @typedef {import('./index.js').PhysicsBody & {usdSyntheticBase?:boolean,articulationRoot?:boolean}} UsdPhysicsBody */
 /** @typedef {Omit<import('./index.js').PhysicsSnapshot,'bodies'|'joints'> & {bodies:UsdPhysicsBody[],joints:UsdPhysicsJoint[]}} UsdPhysicsSnapshot */
 
@@ -28,15 +29,17 @@ function forest() {
  * membership and kinematic/disabled links require an explicit caller adaptation.
  * The result describes a schema export, not Foundation profile certification.
  * @param {import('./index.js').PhysicsSnapshot} source
+ * @param {{jointState?:boolean}} [options] Author state for all enabled scalar joints, including uncoupled assets.
  * @returns {UsdPhysicsSnapshot}
  */
-export function prepareUsdPhysicsSnapshot(source) {
+export function prepareUsdPhysicsSnapshot(source,{jointState=false}={}) {
     validateSnapshot(source);
     const issues=getSnapshotIssues(source);
     if(issues.length)throw new Error('USD physics: '+issues.map(i=>i.path+': '+i.reason).join('; '));
     const snapshot=/** @type {UsdPhysicsSnapshot} */(structuredClone(source));
     const followers=snapshot.joints.filter(j=>j.mimic);
-    if(!followers.length)return snapshot;
+    const addAllStates=()=>{if(jointState)for(const joint of snapshot.joints)if(joint.jointEnabled!==false){const state=getUsdJointState(snapshot,joint);if(state)joint.usdJointState=state;}};
+    if(!followers.length){addAllStates();return snapshot;}
     const bodies=new Map(snapshot.bodies.map(b=>[b.path,b]));
     const joints=new Map(snapshot.joints.map(j=>[j.path,j]));
     const mechanical=forest(),groups=forest();
@@ -110,7 +113,9 @@ export function prepareUsdPhysicsSnapshot(source) {
             }else kept.push(joint.path);
         }
         if(new Set(members.map(b=>tree.find(b.path))).size!==1)throw new Error('USD mimic articulation is disconnected after excluding closure joints.');
+        for(const joint of edges)if(kept.includes(joint.path)){const state=getUsdJointState(snapshot,joint);if(state)joint.usdJointState=state;}
         (snapshot.articulations??=[]).push({path:root,rootPrims:[root],filteredCollisions:[],articulatedBodies:members.map(b=>b.path),articulatedJoints:anchored?[root,...kept]:kept});
     }
+    addAllStates();
     return snapshot;
 }
