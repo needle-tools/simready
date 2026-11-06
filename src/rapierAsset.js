@@ -275,7 +275,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
     /** @param {string} path */
     const measuredPosition = path => {
         const item=descriptions.get(path),pair=jointBodies.get(path);
-        if (!item || !pair) return null;
+        if (!item || !pair || (item.type !== 'revolute' && item.type !== 'prismatic')) return null;
         return coordinates.get(path)?.value ?? jointPosition(item,...pair);
     };
     /** @type {Map<string,number[]>} */
