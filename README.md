@@ -24,8 +24,8 @@ core-shape draft.
 The [USD export guide](docs/usd-export.md) covers converting a composed stage,
 preserving its simulation data, and loading the result in a glTF application.
 
-The [USD coupling metadata codec](docs/usd-metadata.md) shares the existing Needle USD
-joint relationship convention between writers and readers without a USD runtime dependency.
+The [USD coupling codec and articulation planner](docs/usd-metadata.md) author official
+PhysX mimic schemas and explicit articulation topology without a USD runtime dependency.
 
 ## Three.js
 

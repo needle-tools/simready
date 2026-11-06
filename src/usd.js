@@ -1,14 +1,15 @@
 // @ts-check
-/** SimReady joint metadata shared by USD writers and readers. No USD or DOM runtime required. */
+/** Official PhysX USD joint metadata. No USD or DOM runtime required. */
+export {prepareUsdPhysicsSnapshot} from './usdPlanning.js';
 
 export const USD_MIMIC_PROPERTIES = Object.freeze({
-    joint: 'simready:mimicOf',
-    gearing: 'simready:mimicGearing',
-    offset: 'simready:mimicOffset',
+    joint: 'physxMimicJoint:rotX:referenceJoint',
+    gearing: 'physxMimicJoint:rotX:gearing',
+    offset: 'physxMimicJoint:rotX:offset',
 });
 
 /** @typedef {NonNullable<import('./index.js').PhysicsJoint['mimic']>} Mimic */
-/** @typedef {{attributes:Array<{name:string,type:'double',value:number}>,relationships:Array<{name:string,targets:string[]}>}} UsdJointMetadata */
+/** @typedef {{apiSchemas:string[],attributes:Array<{name:string,type:'float'|'uniform token',value:number|string}>,relationships:Array<{name:string,targets:string[]}>}} UsdJointMetadata */
 
 /** @param {Mimic} mimic */
 function validateMimic(mimic) {
@@ -18,22 +19,27 @@ function validateMimic(mimic) {
         throw new TypeError('SimReady mimic coefficients must be finite.');
 }
 
-/** Preserve follower = multiplier * leader + offset using the existing USD
- * metadata convention: follower + gearing * leader + offset = 0.
+/** Preserve follower = multiplier * leader + offset using the PhysxMimicJointAPI
+ * constraint: follower + gearing * leader + offset = 0.
  * Values use the snapshot's source units and degrees, without a glTF conversion.
  * @param {Pick<import('./index.js').PhysicsJoint,'mimic'>} joint
  * @param {(path:string)=>string} [resolvePath] Remap source identities to exported prim paths.
  * @returns {UsdJointMetadata}
  */
 export function encodeUsdJointMetadata(joint, resolvePath = path => path) {
-    if (!joint.mimic) return {attributes:[],relationships:[]};
+    if (!joint.mimic) return {apiSchemas:[],attributes:[],relationships:[]};
     validateMimic(joint.mimic);
+    if(joint.mimic.multiplier===0)throw new TypeError('PhysX mimic gearing must be nonzero.');
     const mimic={...joint.mimic,joint:resolvePath(joint.mimic.joint)};
     validateMimic(mimic);
     return {
+        apiSchemas:['PhysxMimicJointAPI:rotX'],
         attributes:[
-            {name:USD_MIMIC_PROPERTIES.gearing,type:'double',value:-mimic.multiplier},
-            {name:USD_MIMIC_PROPERTIES.offset,type:'double',value:-mimic.offset},
+            {name:'physxMimicJoint:rotX:referenceJointAxis',type:'uniform token',value:'rotX'},
+            {name:USD_MIMIC_PROPERTIES.gearing,type:'float',value:-mimic.multiplier},
+            {name:USD_MIMIC_PROPERTIES.offset,type:'float',value:-mimic.offset},
+            {name:'physxMimicJoint:rotX:naturalFrequency',type:'float',value:-1},
+            {name:'physxMimicJoint:rotX:dampingRatio',type:'float',value:-1},
         ],
         relationships:[{name:USD_MIMIC_PROPERTIES.joint,targets:[mimic.joint]}],
     };
@@ -47,10 +53,14 @@ export function encodeUsdJointMetadata(joint, resolvePath = path => path) {
  * @returns {Mimic|undefined}
  */
 export function decodeUsdJointMetadata(attributes, relationships) {
-    const name=['simready:mimicOf','simready:coupledOf'].find(name=>relationships[name]?.length);
+    const official=Object.keys(relationships).filter(name=>/^physxMimicJoint:(rotX|rotY|rotZ):referenceJoint$/.test(name)&&relationships[name]?.length);
+    if(official.length>1)throw new TypeError('Multiple USD mimic axes cannot represent a single-DOF coupling.');
+    const name=official[0]??['simready:mimicOf','simready:coupledOf'].find(name=>relationships[name]?.length);
     if (!name) return undefined;
     if (relationships[name].length!==1) throw new TypeError('SimReady mimic requires exactly one reference joint.');
-    const prefix=name.slice(0,-2),gearing=attributes[prefix+'Gearing']??1,offset=attributes[prefix+'Offset']??0;
+    const native=name.startsWith('physxMimicJoint:');
+    const prefix=native?name.slice(0,-'referenceJoint'.length):name.slice(0,-2);
+    const gearing=attributes[prefix+(native?'gearing':'Gearing')]??1,offset=attributes[prefix+(native?'offset':'Offset')]??0;
     if(typeof gearing!=='number'||typeof offset!=='number')throw new TypeError('SimReady mimic coefficients must be numbers.');
     const mimic={joint:relationships[name][0],multiplier:-gearing,offset:-offset};
     validateMimic(mimic);

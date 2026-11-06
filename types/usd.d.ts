@@ -1,5 +1,5 @@
-/** Preserve follower = multiplier * leader + offset using the existing USD
- * metadata convention: follower + gearing * leader + offset = 0.
+/** Preserve follower = multiplier * leader + offset using the PhysxMimicJointAPI
+ * constraint: follower + gearing * leader + offset = 0.
  * Values use the snapshot's source units and degrees, without a glTF conversion.
  * @param {Pick<import('./index.js').PhysicsJoint,'mimic'>} joint
  * @param {(path:string)=>string} [resolvePath] Remap source identities to exported prim paths.
@@ -14,18 +14,19 @@ export function encodeUsdJointMetadata(joint: Pick<import("./index.js").PhysicsJ
  * @returns {Mimic|undefined}
  */
 export function decodeUsdJointMetadata(attributes: Record<string, unknown>, relationships: Record<string, string[]>): Mimic | undefined;
-/** SimReady joint metadata shared by USD writers and readers. No USD or DOM runtime required. */
+export { prepareUsdPhysicsSnapshot } from "./usdPlanning.js";
 export const USD_MIMIC_PROPERTIES: Readonly<{
-    joint: "simready:mimicOf";
-    gearing: "simready:mimicGearing";
-    offset: "simready:mimicOffset";
+    joint: "physxMimicJoint:rotX:referenceJoint";
+    gearing: "physxMimicJoint:rotX:gearing";
+    offset: "physxMimicJoint:rotX:offset";
 }>;
 export type Mimic = NonNullable<import("./index.js").PhysicsJoint["mimic"]>;
 export type UsdJointMetadata = {
+    apiSchemas: string[];
     attributes: Array<{
         name: string;
-        type: "double";
-        value: number;
+        type: "float" | "uniform token";
+        value: number | string;
     }>;
     relationships: Array<{
         name: string;

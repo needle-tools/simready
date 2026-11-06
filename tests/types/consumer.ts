@@ -57,3 +57,13 @@ if(joint){
  // @ts-expect-error joint records have an explicit contract
  joint.notAJointSetting=true;
 }
+
+import {prepareUsdPhysicsSnapshot,encodeUsdJointMetadata} from '@needle-tools/simready/usd';
+const planned=prepareUsdPhysicsSnapshot(snapshot);
+const nativeMetadata=encodeUsdJointMetadata(planned.joints[0]);
+const schemas:string[]=nativeMetadata.apiSchemas;
+const synthetic:boolean|undefined=planned.bodies[0].usdSyntheticBase;
+const articulationRoot:boolean|undefined=planned.joints[0].articulationRoot;
+void [schemas,synthetic,articulationRoot];
+// @ts-expect-error export markers are booleans
+planned.joints[0].articulationRoot='yes';

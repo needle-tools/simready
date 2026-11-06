@@ -5,16 +5,16 @@ import {createMechanism} from '../src/kinematics.js';
 
 const decode=metadata=>decodeUsdJointMetadata(Object.fromEntries(metadata.attributes.map(a=>[a.name,a.value])),Object.fromEntries(metadata.relationships.map(r=>[r.name,r.targets])));
 test('USD metadata remaps identities and preserves signed and mixed-unit couplings without mutating input',()=>{
-    for(const multiplier of [-2,0,.003/360])for(const offset of [-10,0,.03]){
+    for(const multiplier of [-2,1,.003/360])for(const offset of [-10,0,.03]){
         const joint={mimic:{joint:'/Input',multiplier,offset}},before=structuredClone(joint);
         const metadata=encodeUsdJointMetadata(joint,path=>'/Asset'+path),actual=decode(metadata);
         assert.deepEqual(actual,{joint:'/Asset/Input',multiplier,offset});
         assert.deepEqual(joint,before);
-        assert.deepEqual(metadata.relationships,[{name:'simready:mimicOf',targets:['/Asset/Input']}]);
+        assert.deepEqual(metadata.relationships,[{name:'physxMimicJoint:rotX:referenceJoint',targets:['/Asset/Input']}]);
     }
 });
 test('USD metadata preserves legacy defaults and rejects malformed coupling data',()=>{
-    assert.deepEqual(encodeUsdJointMetadata({}),{attributes:[],relationships:[]});
+    assert.deepEqual(encodeUsdJointMetadata({}),{apiSchemas:[],attributes:[],relationships:[]});
     assert.equal(decodeUsdJointMetadata({},{}),undefined);
     assert.deepEqual(decodeUsdJointMetadata({},{'simready:coupledOf':['/Input']}),{joint:'/Input',multiplier:-1,offset:-0});
     assert.throws(()=>decodeUsdJointMetadata({},{'simready:mimicOf':['/A','/B']}),/exactly one/);
