@@ -7,6 +7,23 @@ const capabilities = features => ({backend: 'test', shapes: new Set(['box']), jo
 const snapshot = joint => ({metersPerUnit: 1, kilogramsPerUnit: 1, upAxis: 'Y', scenes: [], materials: [], groups: [], shapes: [],
     bodies: [{path: '/Lamp', position: [0, -1, 0], rotation: [0, 0, 0, 1]}], joints: [{path: '/Socket', type: 'spherical', body1: '/Lamp', ...joint}]});
 
+test('SDF cooking quality follows physical extent rather than stage units or unscaled mesh coordinates', () => {
+    const describe = (metersPerUnit, extent, meshScale = 1) => {
+        const source = {...snapshot({}), metersPerUnit, joints: [], shapes: [{
+            path: '/Lamp/Surface', body: '/Lamp', type: 'mesh', approximation: 'sdf',
+            points: [0, 0, 0, extent, 0, 0, 0, extent, 0, 0, 0, extent],
+            indices: [0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3], meshScale: [meshScale, meshScale, meshScale],
+        }]};
+        return describeSimulation(source, {capabilities: {...capabilities([]), shapes: new Set(['convexDecomposition'])}}).colliders[0].shape;
+    };
+    const metres = describe(1, 1), centimetres = describe(.01, 100), scaled = describe(1, .1, 10);
+    assert.equal(metres.type, 'convexDecomposition');
+    assert.equal(metres.resolution, centimetres.resolution);
+    assert.equal(metres.resolution, scaled.resolution);
+    assert.ok(describe(1, .1).resolution < metres.resolution, 'small parts keep the cheaper grid');
+    assert.deepEqual(metres.points, scaled.points);
+});
+
 test('spherical cone limits from the joint limit use the smaller authored angle on backends with spherical limits', () => {
     const source = snapshot({axis: 'Y', limit: {enabled: true, lower: 30, upper: 20}});
     validateSnapshot(source);

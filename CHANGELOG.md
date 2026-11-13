@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preserve mechanical clearances in large SDF-source collision meshes without increasing the cooking grid for small parts.
 - Keep valid hinges and sliders usable when a fixed attachment has inconsistent frames; manipulation preserves the attachment's authored rest offset and reports the mismatch.
 - Improve contacts between thin SDF-source collision meshes without changing their geometry or mass.
 - Preserve body damping in snapshots and both physics adapters. Pointer grabs damp sideways motion and no longer inject cursor-jump velocities; release restores the body's damping and retains its momentum.

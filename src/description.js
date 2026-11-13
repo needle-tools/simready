@@ -141,7 +141,18 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                 if (data.approximation === 'convexHull') shape = {type: 'convexHull', points};
                 else if (data.approximation === 'sdf') {
                     if (!capabilities.shapes.has('convexDecomposition')) { warn(data, `SDF-source mesh collision requires ${capabilities.backend === 'rapier' ? 'Rapier ' : ''}convex decomposition support.`); continue; }
-                    shape = {type: 'convexDecomposition', points, indices, resolution: 64, concavity: .001, maxHulls: 128};
+                    // Aim for 5 mm cells within the cooking budget. A coarse
+                    // grid on a large chassis can close wheel/joint clearances;
+                    // small parts do not need the larger grid.
+                    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+                    for (let i = 0; i < points.length; i++) {
+                        const axis = i % 3;
+                        min[axis] = Math.min(min[axis], points[i]);
+                        max[axis] = Math.max(max[axis], points[i]);
+                    }
+                    const extent = Math.max(...max.map((value, axis) => value - min[axis])) * mpu;
+                    const resolution = Math.max(64, Math.min(128, 2 ** Math.ceil(Math.log2(extent / .005))));
+                    shape = {type: 'convexDecomposition', points, indices, resolution, concavity: .001, maxHulls: 128};
                     adaptations.push({path: data.path, source: 'sdf', target: 'convex decomposition',
                         reason: 'The authored collision surface is represented by a concave compound of convex parts.'});
                 }
