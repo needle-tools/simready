@@ -58,6 +58,18 @@ function bodyAdapter(description) {
         linvel: () => handle ? handle.getLinearVelocity() : copy(description.linearVelocity),
         angvel: () => handle ? handle.getAngularVelocity() : copy(description.angularVelocity),
         mass: () => handle?.mass ?? 0,
+        linearDamping: () => handle?.component.drag ?? description.linearDamping ?? 0,
+        angularDamping: () => handle?.component.angularDrag ?? description.angularDamping ?? 0,
+        setLinearDamping(value) {
+            if (!handle) return;
+            handle.component.drag = value;
+            handle.component.updateProperties?.();
+        },
+        setAngularDamping(value) {
+            if (!handle) return;
+            handle.component.angularDrag = value;
+            handle.component.updateProperties?.();
+        },
         isDynamic: () => (handle?.type ?? description.type) === 'dynamic',
         isSleeping: () => !!handle?.isSleeping,
         setTranslation(value, wake) { handle?.setPose({position: value}, wake); },
@@ -157,6 +169,10 @@ export async function createNeedleWorld({context, metersPerUnit = 1, kilogramsPe
                     const handle = created.bodies.get(path);
                     if (!handle) throw new Error('Engine did not create imported body: ' + path);
                     record.body.attach(handle);
+                    // Keep component properties and the imported body's actual
+                    // damping in sync, including the snapshot's zero defaults.
+                    record.body.setLinearDamping(record.data.linearDamping ?? 0);
+                    record.body.setAngularDamping(record.data.angularDamping ?? 0);
                 }
                 /** @type {Map<string,import('@needle-tools/engine').Collider>} */
                 const colliderComponents = new Map();
@@ -185,7 +201,10 @@ export async function createNeedleWorld({context, metersPerUnit = 1, kilogramsPe
                                 bodies: [{id: 'anchor', type: 'kinematic', position: point}],
                                 joints: [{id: 'drag', type: 'spring', body0: component, body1: 'anchor', anchor0: local, spring: {stiffness, damping}}]});
                             const anchor = drag.bodies.get('anchor');
-                            return {move(next) { anchor?.setKinematicTarget({position: next}); }, end() { drag.dispose(); }};
+                            return {move(next) {
+                                anchor?.setPose({position: next});
+                                anchor?.setKinematicTarget({position: next});
+                            }, end() { drag.dispose(); }};
                         },
                     }});
                 const result = simulation = Object.assign(runtime, {

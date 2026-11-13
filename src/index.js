@@ -11,6 +11,7 @@
     path: string; position: PhysicsVector; rotation: PhysicsRotation; scale?: PhysicsVector;
     rigidBodyEnabled?: boolean; kinematicBody?: boolean; startsAsleep?: boolean;
     linearVelocity?: PhysicsVector; angularVelocity?: PhysicsVector;
+    linearDamping?: number; angularDamping?: number;
     filteredCollisions?: string[]; simulationOwners?: string[];
 }} PhysicsBody */
 /** @typedef {PhysicsMass & {

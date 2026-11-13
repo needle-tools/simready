@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preserve body damping in snapshots and both physics adapters. Pointer grabs damp sideways motion and no longer inject cursor-jump velocities; release restores the body's damping and retains its momentum.
 - Create Needle Engine dynamics with Engine's `physics.createAsset`. SimReady describes shapes, mass properties, joints, drives, articulations and collision filters; Engine creates the physics objects and their components. Requires a Needle Engine version with `physics.createAsset`.
 - Key Needle collider components by collider path. Needle asset bodies expose pose and velocity methods instead of raw Rapier bodies, and `world.capabilities` reports backend support.
 - Share snapshot interpretation and playback controls between the standalone Rapier and Needle adapters.

@@ -23,9 +23,19 @@ export type Rotation = Vector & {
  * They are declared here so SimReady's types also compile against Engine versions
  * that predate this API. createNeedleWorld checks for the API at runtime.
  */
+export type DampedComponent = {
+    drag?: number;
+    angularDrag?: number;
+    updateProperties?(): unknown;
+};
+/**
+ * The parts of Needle Engine's physics asset API that SimReady uses.
+ * They are declared here so SimReady's types also compile against Engine versions
+ * that predate this API. createNeedleWorld checks for the API at runtime.
+ */
 export type EngineBody = {
     readonly id: string;
-    readonly component: object;
+    readonly component: DampedComponent;
     readonly isValid: boolean;
     type: "dynamic" | "kinematic" | "fixed";
     readonly isSleeping: boolean;

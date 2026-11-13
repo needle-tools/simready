@@ -11,6 +11,8 @@
  * translation():Vector; rotation():Rotation; mass():number; isDynamic():boolean;
  * setTranslation(value:Vector,wake:boolean):void; setRotation(value:Rotation,wake:boolean):void;
  * setLinvel(value:Vector,wake:boolean):void; setAngvel(value:Vector,wake:boolean):void;
+ * linearDamping():number; angularDamping():number;
+ * setLinearDamping(value:number):void; setAngularDamping(value:number):void;
  * resetForces(wake:boolean):void; resetTorques(wake:boolean):void; sleep():void;
  * }} RuntimeBody
  */
@@ -38,6 +40,21 @@ const rotation = (a = [0, 0, 0, 1]) => ({x: a[0], y: a[1], z: a[2], w: a[3]});
 /** @param {PhysicsJoint} data */
 const unitOf = data => data.type === 'revolute' ? Math.PI / 180 : 1;
 
+/** Bound the grab's effective mass using the authored principal inertia. A light
+ * rotational degree of freedom must not receive a spring tuned for the full body.
+ * @param {number} mass @param {PhysicsBody} data @param {Vector3} local @param {number} kilogramsPerUnit
+ */
+function grabMass(mass, data, local, kilogramsPerUnit) {
+    const inertia = data.diagonalInertia?.map(value => value * kilogramsPerUnit);
+    if (!inertia?.every(value => Number.isFinite(value) && value > 0)) return mass;
+    const center = new Vector3().fromArray(data.centerOfMass || [0, 0, 0])
+        .multiply(new Vector3().fromArray(data.scale || [1, 1, 1]));
+    const r = local.clone().sub(center).applyQuaternion(new Quaternion().fromArray(data.principalAxes || [0, 0, 0, 1]).invert());
+    const angularInverseMass = r.x ** 2 * (1 / inertia[1] + 1 / inertia[2])
+        + r.y ** 2 * (1 / inertia[0] + 1 / inertia[2]) + r.z ** 2 * (1 / inertia[0] + 1 / inertia[1]);
+    return 1 / (1 / mass + angularInverseMass);
+}
+
 /**
  * Play, pause, reset, joint drives and dragging. The standalone and Needle adapters both use this.
  * Joint values and targets are in the snapshot's units, with angles in degrees.
@@ -52,14 +69,19 @@ export function createSimulationRuntime({snapshot, mode, bodies, joints, backend
     let playing = false, released = false, accumulator = 0, held = false;
     // The host may free our physics objects on its own, for example when its world is disposed.
     const gone = () => released || isReleased();
-    /** @type {{handle:{move(position:Vector):void,end():void},pinned:Array<()=>void>}|null} */
+    /** @type {{handle:{move(position:Vector):void,end():void},pinned:Array<()=>void>,body:B,linearDamping:number,angularDamping:number}|null} */
     let drag = null;
     /** @type {Map<string,{data:PhysicsJoint,drive:PhysicsDrive|undefined}>} */
     const controls = new Map([...joints].map(([path, data]) => [path, {data, drive: data.drive ? {...data.drive} : undefined}]));
     function endDrag() {
         if (!drag) return;
-        const {handle, pinned} = drag; drag = null;
-        handle.end(); for (const restore of pinned) restore();
+        const {handle, pinned, body, linearDamping, angularDamping} = drag; drag = null;
+        try { handle.end(); }
+        finally {
+            body.setLinearDamping(linearDamping);
+            body.setAngularDamping(angularDamping);
+            for (const restore of pinned) restore();
+        }
     }
     const pauseBodies = () => { if (held || gone()) return; held = true; backend.hold(); };
     const resumeBodies = () => { if (!held) return; held = false; backend.release(); };
@@ -133,8 +155,9 @@ export function createSimulationRuntime({snapshot, mode, bodies, joints, backend
         beginDrag(path, position) {
             if (gone()) return false;
             endDrag();
-            const body = bodies.get(path)?.body;
-            if (!body?.isDynamic() || !playing) return false;
+            const record = bodies.get(path);
+            if (!record || !record.body.isDynamic() || !playing) return false;
+            const {body, data} = record;
             const local = new Vector3().copy(position).sub(body.translation()).applyQuaternion(new Quaternion().copy(body.rotation()).invert());
             /** @type {Array<()=>void>} */
             const pinned = [];
@@ -157,9 +180,24 @@ export function createSimulationRuntime({snapshot, mode, bodies, joints, backend
             // A rigid mouse constraint fights the mechanism's own limits when
             // the pointer moves beyond its range. A damped spring lets the grab
             // yield while the authored joints stay rigid.
-            const mass = Math.max(body.mass(), 1e-6);
-            try { drag = {handle: backend.beginDrag(body, position, local, 400 * mass, 40 * mass), pinned}; }
-            catch (error) { for (const restore of pinned) restore(); throw error; }
+            const bodyMass = Math.max(body.mass(), 1e-6);
+            // Interaction mode uses posing mass properties rather than the
+            // simulation's physical inertia, so retain its existing tuning.
+            const mass = mode === 'simulation' ? grabMass(bodyMass, data, local, snapshot.kilogramsPerUnit ?? 1) : bodyMass;
+            const linearDamping = body.linearDamping(), angularDamping = body.angularDamping();
+            try {
+                // A distance spring damps motion along its axis. An off-centre
+                // grab also needs damping tangential to that axis to settle.
+                body.setLinearDamping(Math.max(linearDamping, 12));
+                body.setAngularDamping(Math.max(angularDamping, 12));
+                drag = {handle: backend.beginDrag(body, position, local, 400 * mass, 40 * mass),
+                    pinned, body, linearDamping, angularDamping};
+            } catch (error) {
+                body.setLinearDamping(linearDamping);
+                body.setAngularDamping(angularDamping);
+                for (const restore of pinned) restore();
+                throw error;
+            }
             return true;
         },
         /** @param {Vector} position */

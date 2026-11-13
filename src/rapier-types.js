@@ -12,6 +12,7 @@
  * translation():Vector; rotation():Rotation; linvel():Vector; angvel():Vector;
  * nextTranslation():Vector; nextRotation():Rotation;
  * mass():number; localCom():Vector; principalInertia():Vector; principalInertiaLocalFrame():Rotation;
+ * linearDamping():number; angularDamping():number; setLinearDamping(value:number):void; setAngularDamping(value:number):void;
  * bodyType():number; isDynamic():boolean; isEnabled():boolean; isSleeping():boolean;
  * setTranslation(value:Vector,wake:boolean):void; setRotation(value:Rotation,wake:boolean):void;
  * setLinvel(value:Vector,wake:boolean):void; setAngvel(value:Vector,wake:boolean):void;
@@ -38,6 +39,7 @@
  * setRotation(value:Rotation):RigidBodyDescriptor;
  * setLinvel(x:number,y:number,z:number):RigidBodyDescriptor;
  * setAngvel(value:Vector):RigidBodyDescriptor;
+ * setLinearDamping(value:number):RigidBodyDescriptor; setAngularDamping(value:number):RigidBodyDescriptor;
  * setSleeping(value:boolean):RigidBodyDescriptor;
  * setCcdEnabled(value:boolean):RigidBodyDescriptor;
  * }} RigidBodyDescriptor

@@ -28,6 +28,10 @@ export type RigidBody = {
     localCom(): Vector;
     principalInertia(): Vector;
     principalInertiaLocalFrame(): Rotation;
+    linearDamping(): number;
+    angularDamping(): number;
+    setLinearDamping(value: number): void;
+    setAngularDamping(value: number): void;
     bodyType(): number;
     isDynamic(): boolean;
     isEnabled(): boolean;
@@ -68,6 +72,8 @@ export type RigidBodyDescriptor = {
     setRotation(value: Rotation): RigidBodyDescriptor;
     setLinvel(x: number, y: number, z: number): RigidBodyDescriptor;
     setAngvel(value: Vector): RigidBodyDescriptor;
+    setLinearDamping(value: number): RigidBodyDescriptor;
+    setAngularDamping(value: number): RigidBodyDescriptor;
     setSleeping(value: boolean): RigidBodyDescriptor;
     setCcdEnabled(value: boolean): RigidBodyDescriptor;
 };

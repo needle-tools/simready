@@ -80,6 +80,11 @@ Meshes update when the world steps. Attach additional assets with their own IDs
 to get contacts between them. The application still owns the Three.js scene,
 geometries, materials and textures.
 
+Body snapshots accept nonnegative `linearDamping` and `angularDamping` rates in
+inverse seconds. Explicit zero means no damping. During a physics drag, the
+grabbed body receives extra damping so off-centre grabs settle; releasing restores
+its configured rates and retains its current velocity.
+
 ## Needle Engine
 
 Inside a Needle `Behaviour`, use `this.context` as `context` in these examples.

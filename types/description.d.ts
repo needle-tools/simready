@@ -82,6 +82,8 @@ export type BodyDescription = {
     sleeping: boolean;
     continuousCollision: boolean;
     mass?: MassDescription;
+    linearDamping?: number;
+    angularDamping?: number;
 };
 export type ColliderDescription = {
     id: string;

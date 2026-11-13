@@ -106,6 +106,8 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             desc.setTranslation(item.position.x, item.position.y, item.position.z).setRotation(item.rotation);
             desc.setLinvel(item.linearVelocity.x, item.linearVelocity.y, item.linearVelocity.z);
             desc.setAngvel(item.angularVelocity);
+            desc.setLinearDamping(item.linearDamping ?? 0);
+            desc.setAngularDamping(item.angularDamping ?? 0);
             desc.setSleeping(item.sleeping);
             if (item.continuousCollision) desc.setCcdEnabled(true);
             bodies.set(item.id, makeBody(desc));
@@ -408,7 +410,9 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             const anchor = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(position.x, position.y, position.z));
             const joint = world.createImpulseJoint(R.JointData.spring(0, stiffness, damping, local, vec(undefined)), body, anchor, true);
             return {
-                move(next) { anchor.setNextKinematicTranslation(next); },
+                // The cursor is a target, not a moving physical body. A pointer
+                // jump must not inject a kinematic velocity into the spring.
+                move(next) { anchor.setTranslation(next, true); anchor.setNextKinematicTranslation(next); },
                 end() { world.removeImpulseJoint(joint, true); world.removeRigidBody(anchor); },
             };
         },

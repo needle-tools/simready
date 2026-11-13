@@ -15,7 +15,7 @@
  * |{type:'convexDecomposition',points:Float32Array,indices:Uint32Array,maxHulls?:number,resolution?:number,concavity?:number}} ShapeDescription
  */
 /** @typedef {{id:string,type:'dynamic'|'kinematic'|'fixed',position:Vector,rotation:Rotation,linearVelocity:Vector,angularVelocity:Vector,
- * sleeping:boolean,continuousCollision:boolean,mass?:MassDescription}} BodyDescription */
+ * sleeping:boolean,continuousCollision:boolean,mass?:MassDescription,linearDamping?:number,angularDamping?:number}} BodyDescription */
 /** @typedef {{id:string,body?:string,shape:ShapeDescription,position:Vector,rotation:Rotation,friction:number,restitution:number,density:number,mass?:MassDescription}} ColliderDescription */
 /** @typedef {{model:'force'|'acceleration',stiffness:number,damping:number,maxForce?:number,targetPosition:number,targetVelocity:number}} DriveDescription */
 /** @typedef {{id:string,type:'fixed'|'revolute'|'prismatic'|'spherical'|'distance'|'spring',body0?:string,body1?:string,
@@ -103,6 +103,8 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
         bodies.push({id: data.path, type, position: vector(data.position), rotation: rotation(q(data.rotation)),
             linearVelocity: vector(data.linearVelocity),
             angularVelocity: plain(new Vector3().fromArray(data.angularVelocity || [0, 0, 0]).multiplyScalar(Math.PI / 180)),
+            ...(data.linearDamping !== undefined ? {linearDamping: data.linearDamping} : {}),
+            ...(data.angularDamping !== undefined ? {angularDamping: data.angularDamping} : {}),
             sleeping: !!data.startsAsleep, continuousCollision: type === 'dynamic',
             mass: bodyMass(data, mode, kgpu)});
         bodyData.set(data.path, data);

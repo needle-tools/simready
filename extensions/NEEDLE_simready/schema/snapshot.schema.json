@@ -210,6 +210,16 @@
           "$ref": "common.schema.json#/$defs/vector3",
           "description": "Metres per second in the asset-local frame."
         },
+        "linearDamping": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Linear velocity damping coefficient in inverse seconds."
+        },
+        "angularDamping": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Angular velocity damping coefficient in inverse seconds."
+        },
         "angularVelocity": {
           "$ref": "common.schema.json#/$defs/vector3",
           "description": "Radians per second in the asset-local frame."

@@ -5,7 +5,8 @@
  * that predate this API. createNeedleWorld checks for the API at runtime.
  * @typedef {{x:number,y:number,z:number}} Vector
  * @typedef {Vector & {w:number}} Rotation
- * @typedef {{readonly id:string,readonly component:object,readonly isValid:boolean,type:'dynamic'|'kinematic'|'fixed',
+ * @typedef {{drag?:number,angularDrag?:number,updateProperties?():unknown}} DampedComponent
+ * @typedef {{readonly id:string,readonly component:DampedComponent,readonly isValid:boolean,type:'dynamic'|'kinematic'|'fixed',
  * readonly isSleeping:boolean,readonly mass:number,
  * getPosition():Vector,getRotation():Rotation,setPose(pose:{position?:Vector,rotation?:Rotation},wake?:boolean):void,
  * setKinematicTarget(pose:{position?:Vector,rotation?:Rotation}):void,

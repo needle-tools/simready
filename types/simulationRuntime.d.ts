@@ -62,6 +62,10 @@ export type RuntimeBody = {
     setRotation(value: Rotation, wake: boolean): void;
     setLinvel(value: Vector, wake: boolean): void;
     setAngvel(value: Vector, wake: boolean): void;
+    linearDamping(): number;
+    angularDamping(): number;
+    setLinearDamping(value: number): void;
+    setAngularDamping(value: number): void;
     resetForces(wake: boolean): void;
     resetTorques(wake: boolean): void;
     sleep(): void;
