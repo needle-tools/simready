@@ -2,12 +2,13 @@
 import {BufferGeometry,Float32BufferAttribute,Matrix4,Quaternion,Vector3} from 'three';
 import {helperGeometry,disposeHelper} from './helperGeometry.js';
 
-/** Joint axes, stops and angular limits in USD stage coordinates. */
-/** @param {import('../kinematics.js').Mechanism & {root:import('three').Object3D}} mechanism
+/** @typedef {Pick<import('../kinematics.js').JointRecord,'data'|'sign'|'dof'|'parent'|'child'|'angular'|'lower'|'upper'>} HelperJoint */
+/** Joint axes, stops and angular limits in stage coordinates, from live poses. */
+/** @param {{root:import('three').Object3D,metersPerUnit:number,joints:ReadonlyMap<string,HelperJoint>,bodies:import('../kinematics.js').MechanismBodies,getJointValue(path:string):number|null,isPlaying():boolean}} mechanism
  * @param {{visible?:(path:string,body:string)=>boolean,selected?:(path:string,body:string)=>boolean}} [options]
  * @returns {{objects:import('three').LineSegments<BufferGeometry,import('three').LineBasicMaterial>[],update():void,dispose():void}} */
 export function createJointHelpers(mechanism,{visible=()=>true,selected=()=>false}={}){
- /** @type {Array<{record:import('../kinematics.js').JointRecord,object:import('three').LineSegments<BufferGeometry,import('three').LineBasicMaterial>,markers:import('three').Points<BufferGeometry,import('three').PointsMaterial>}>} */
+ /** @type {Array<{record:HelperJoint,object:import('three').LineSegments<BufferGeometry,import('three').LineBasicMaterial>,markers:import('three').Points<BufferGeometry,import('three').PointsMaterial>}>} */
  const objects=[];
  const unit=new Vector3(1,1,1);
  const unitScale=mechanism.metersPerUnit||1;
