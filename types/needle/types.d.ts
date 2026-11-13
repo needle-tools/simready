@@ -146,6 +146,7 @@ export type EngineAssetDescription = {
 export type EnginePhysics = {
     initialize(): unknown;
     readonly capabilities?: import("../description.js").Capabilities;
+    getBody?(component: object): unknown;
     createAsset(description: EngineAssetDescription): EngineAsset;
     onWorldDisposed(callback: () => void): () => void;
 };

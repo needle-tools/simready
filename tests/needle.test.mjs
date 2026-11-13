@@ -19,7 +19,7 @@ function host(){
  const world=new R.World({x:0,y:-9.81,z:0}),events=new R.EventQueue(true),scene=new Object3D(),assets=[],listeners=new Set();
  const handles=new Map();
  const hooks={filterContactPair(a,b){for(const asset of assets)if(!asset.isDisposed&&!asset.filter(a,b))return null;return R.SolverFlags.COMPUTE_IMPULSE;},filterIntersectionPair(){return true;}};
- const physics={capabilities:rapierCapabilities(R),async initialize(){return true;},
+ const physics={capabilities:rapierCapabilities(R),async initialize(){return true;},getBody(component){return component.collider??component.body;},
   onWorldDisposed(callback){listeners.add(callback);return()=>listeners.delete(callback);},
   createAsset(description){
    const {joints=[],...source}=description,external=joints.filter(joint=>typeof joint.body0==='object');
@@ -123,6 +123,43 @@ test('dragging creates a temporary spring asset against the Engine body and rele
   assert.ok(asset.bodies.get('/Body').body.translation().y>2.5,'the spring lifts the body toward the pointer');
   asset.endDrag();assert.equal(drag.isDisposed,true);assert.equal(asset.bodies.get('/Body').body.isValid(),true);
  }finally{sim.dispose();h.free();}
+});
+
+test('decomposed SDF contacts configure the native collider without changing its mass',async()=>{
+ const h=host(),physics=h.context.physics.getOrCreatePhysicsEngine(),create=physics.createAsset.bind(physics);
+ const geometry=new BoxGeometry(.14,.008,.004),source=snapshot();
+ source.shapes=[{path:'/Body/Shape',body:'/Body',type:'mesh',approximation:'sdf',
+  points:Array.from(geometry.attributes.position.array),indices:Array.from(geometry.index.array),position:[0,0,0],rotation:q}];
+ physics.createAsset=description=>{
+  const result=create(description);
+  for(const collider of result.colliders.values()){
+   const native=physics.getBody(collider.component),shape=native.shape;
+   shape.flags=R.CompoundFlags.FIX_INTERNAL_EDGES;native.setShape(shape);
+  }
+  return result;
+ };
+ const sim=await createNeedleWorld({context:h.context});
+ try{
+  const asset=await sim.addAsset({snapshot:source});
+  const native=physics.getBody(asset.colliderComponents.get('/Body/Shape'));
+  assert.equal(native.shape.flags,0);
+  assert.ok(Math.abs(native.contactSkin()-.0005)<1e-9);
+  assert.equal(asset.bodies.get('/Body').body.mass(),2);
+  assert.deepEqual(asset.unsupported,[]);
+ }finally{sim.dispose();h.free();geometry.dispose();}
+});
+
+test('strict SDF simulation reports unavailable native contact settings and releases the asset',async()=>{
+ const h=host(),physics=h.context.physics.getOrCreatePhysicsEngine(),geometry=new BoxGeometry(.14,.008,.004);
+ physics.getBody=undefined;
+ const source=snapshot();source.shapes=[{path:'/Body/Shape',body:'/Body',type:'mesh',approximation:'sdf',
+  points:Array.from(geometry.attributes.position.array),indices:Array.from(geometry.index.array),position:[0,0,0],rotation:q}];
+ const sim=await createNeedleWorld({context:h.context});
+ try{
+  await assert.rejects(sim.addAsset({snapshot:source}),/cannot configure the compound contacts/);
+  assert.equal(h.world.bodies.len(),0);assert.equal(h.world.colliders.len(),0);
+  assert.equal(sim.assets.size,0);
+ }finally{sim.dispose();h.free();geometry.dispose();}
 });
 test('collision filters and drives reach Engine through the description',async()=>{
  const h=host(),sim=await createNeedleWorld({context:h.context});

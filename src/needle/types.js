@@ -27,6 +27,7 @@
  * articulations?:import('../description.js').ArticulationDescription[],
  * shouldCollide?(a:EngineCollider,b:EngineCollider):boolean,onAfterStep?():void,onDestroy?():void}} EngineAssetDescription
  * @typedef {{initialize():unknown,readonly capabilities?:import('../description.js').Capabilities,
+ * getBody?(component:object):unknown,
  * createAsset(description:EngineAssetDescription):EngineAsset,onWorldDisposed(callback:()=>void):()=>void}} EnginePhysics
  * @typedef {import('../simulationRuntime.js').RuntimeBody & {
  * readonly handle:EngineBody|undefined,attach(handle:EngineBody):void,isValid():boolean,

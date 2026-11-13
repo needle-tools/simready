@@ -14,6 +14,7 @@ import {supportsPhysicsAssets} from './types.js';
 import {describeSimulation} from '../description.js';
 import {validateSnapshot} from '../index.js';
 import {getSimulationLimitations} from '../rapier.js';
+import {isRecord} from '../validation.js';
 import {createSimulationRuntime} from '../simulationRuntime.js';
 import {transformSnapshot} from '../transform.js';
 
@@ -176,13 +177,32 @@ export async function createNeedleWorld({context, metersPerUnit = 1, kilogramsPe
                 }
                 /** @type {Map<string,import('@needle-tools/engine').Collider>} */
                 const colliderComponents = new Map();
+                const contactSkins = new Map(description.colliders.map(item => [item.id, item.contactSkin]));
                 for (const [path, record] of colliders) {
                     const handle = created.colliders.get(path);
                     if (!handle) { colliders.delete(path); continue; }
                     record.collider = handle;
                     record.owner?.colliders.push(handle);
                     colliderComponents.set(path, /** @type {import('@needle-tools/engine').Collider} */ (handle.component));
+                    const skin = contactSkins.get(path);
+                    if (skin !== undefined) {
+                        // @temporary Added 2026-11-13T17:29:01Z: asset descriptors
+                        // lack contact skin and compound-normal settings. Use
+                        // Engine's public native interop until its asset API
+                        // exposes these settings, then remove this block.
+                        const native = physics.getBody?.(handle.component);
+                        const shape = isRecord(native) ? native.shape : undefined;
+                        if (isRecord(native) && typeof native.setContactSkin === 'function' && typeof native.setShape === 'function'
+                            && isRecord(shape) && Array.isArray(shape.shapes) && typeof shape.flags === 'number') {
+                            if (shape.flags !== 0) {
+                                shape.flags = 0;
+                                native.setShape(shape);
+                            }
+                            native.setContactSkin(skin);
+                        } else warn(record.data, 'The Engine backend cannot configure the compound contacts required for SDF-source mesh collision.');
+                    }
                 }
+                fail();
                 const rigidbodies = new Map([...bodies].map(([path, record]) => [path, /** @type {import('@needle-tools/engine').Rigidbody} */ (/** @type {EngineBody} */ (record.body.handle).component)]));
                 const articulation = created.adaptations.filter(item => item.source === 'reduced-coordinate articulation');
                 const adaptations = [...articulation, ...description.adaptations.map(item => ({...item, id: item.path})), ...created.adaptations.filter(item => !articulation.includes(item))]
