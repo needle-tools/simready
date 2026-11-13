@@ -106,7 +106,15 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
    if(closure){
     const target=new Link(),fixed=new Joint();setFrame(fixed,frame(data,1));(child?body(child).link:world).addChild(fixed);fixed.addChild(target);joint.makeClosure(target);closures.push(record);
    }else{
-    const link=body(child).link;setFrame(link,frame(data,reversed?0:1).invert());joint.addChild(link);parents.set(child,record);
+    const link=body(child).link,offset=frame(data,reversed?0:1).invert();
+    if(dof===null){
+     // A fixed attachment has no editable coordinate. Preserve its authored
+     // rest pose during manipulation, and report inconsistent constraint frames
+     // without disabling independent, valid movable joints.
+     if(p.length()>tolerance*10||q.angleTo(new Quaternion())>1e-3)warn(data,'Fixed joint frames disagree with the authored body pose; manipulation preserves its rest offset.');
+     offset.premultiply(relative);
+    }
+    setFrame(link,offset);joint.addChild(link);parents.set(child,record);
    }
    joints.set(data.path,record);return record;
   }

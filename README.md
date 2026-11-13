@@ -50,6 +50,8 @@ mechanism.setJointValue('/Assembly/Hinge', 45);
 
 Loading preserves the resting pose and starts no solver. Kinematics loads on demand and handles limits, fixed attachments, mimic relationships and closed linkages. Hinge controls use degrees; slider controls use metres.
 
+During manipulation, fixed attachments retain their authored rest offset. Inconsistent fixed-joint frames produce a warning without blocking valid movable joints. Dynamics continues to use the authored constraint frames.
+
 Use the joint paths stored in your asset; `/Assembly/Hinge` and `/Assembly/Slide`
 are examples. `runtime.snapshot` contains the bodies, colliders and joints in glTF metres and radians, and
 `runtime.usdMetadata` contains the retained schema metadata.
