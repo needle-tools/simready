@@ -84,6 +84,7 @@ export type ColliderDescriptor = {
     setRestitution(value: number): ColliderDescriptor;
     setDensity(value: number): ColliderDescriptor;
     setMass(value: number): ColliderDescriptor;
+    setContactSkin(value: number): ColliderDescriptor;
     setMassProperties(mass: number, com: Vector, inertia: Vector, frame: Rotation): ColliderDescriptor;
     setActiveHooks(hooks: number): ColliderDescriptor;
 };

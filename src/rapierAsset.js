@@ -125,11 +125,14 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
                 case 'plane': desc = R.ColliderDesc.halfspace?.(vec(shape.normal)); break;
                 case 'convexHull': desc = R.ColliderDesc.convexHull(shape.points); break;
                 case 'convexDecomposition': desc = R.ColliderDesc.convexDecomposition?.(shape.points, shape.indices,
-                    {resolution: shape.resolution ?? 64, concavity: shape.concavity ?? .001, maxConvexHulls: shape.maxHulls ?? 128}, R.CompoundFlags?.FIX_INTERNAL_EDGES ?? 1); break;
+                    // Normal clamping across decomposition cuts can discard
+                    // valid contacts between thin, curved compound shapes.
+                    {resolution: shape.resolution ?? 64, concavity: shape.concavity ?? .001, maxConvexHulls: shape.maxHulls ?? 128}, 0); break;
                 case 'triangleMesh': desc = R.ColliderDesc.trimesh(shape.points, shape.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES_TWO_SIDED); break;
             }
             if (!desc) { warn(data, 'Collider could not be constructed.'); continue; }
             desc.setFriction(item.friction).setRestitution(item.restitution);
+            if (item.contactSkin !== undefined) desc.setContactSkin(item.contactSkin);
             desc.setDensity(item.density);
             const mass = item.mass;
             if ((mass?.mass ?? 0) > 0) desc.setMass(mass?.mass ?? 0);

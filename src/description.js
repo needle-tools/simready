@@ -16,7 +16,7 @@
  */
 /** @typedef {{id:string,type:'dynamic'|'kinematic'|'fixed',position:Vector,rotation:Rotation,linearVelocity:Vector,angularVelocity:Vector,
  * sleeping:boolean,continuousCollision:boolean,mass?:MassDescription,linearDamping?:number,angularDamping?:number}} BodyDescription */
-/** @typedef {{id:string,body?:string,shape:ShapeDescription,position:Vector,rotation:Rotation,friction:number,restitution:number,density:number,mass?:MassDescription}} ColliderDescription */
+/** @typedef {{id:string,body?:string,shape:ShapeDescription,position:Vector,rotation:Rotation,friction:number,restitution:number,density:number,mass?:MassDescription,contactSkin?:number}} ColliderDescription */
 /** @typedef {{model:'force'|'acceleration',stiffness:number,damping:number,maxForce?:number,targetPosition:number,targetVelocity:number}} DriveDescription */
 /** @typedef {{id:string,type:'fixed'|'revolute'|'prismatic'|'spherical'|'distance'|'spring',body0?:string,body1?:string,
  * anchor0:Vector,rotation0:Rotation,anchor1:Vector,rotation1:Rotation,axis:Vector,limits?:{lower:number,upper:number},
@@ -166,7 +166,20 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                 ...data.diagonalInertia && {inertia: plain(new Vector3().fromArray(data.diagonalInertia).multiplyScalar(kgpu))},
                 ...(data.principalAxes || data.diagonalInertia) && {inertiaRotation: rotation(inverseShape.multiply(q(data.principalAxes)))}};
         }
+        // A decomposed SDF needs a small contact skin to keep thin surfaces
+        // from crossing within the solver's penetration tolerance. Cap it for
+        // miniature meshes; the skin does not change geometry or mass.
+        let contactSkin;
+        if (shape.type === 'convexDecomposition') {
+            const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+            for (let i = 0; i < shape.points.length; i++) {
+                const axis = i % 3, value = shape.points[i];
+                min[axis] = Math.min(min[axis], value); max[axis] = Math.max(max[axis], value);
+            }
+            contactSkin = Math.min(.0005 / mpu, Math.max(...max.map((value, axis) => value - min[axis])) * .01);
+        }
         colliders.push({id: data.path, body: owner?.path, shape, position: vector(data.position), rotation: rotation(q(data.rotation).multiply(extraRotation)),
+            ...(contactSkin !== undefined && contactSkin > 0 ? {contactSkin} : {}),
             friction: material?.dynamicFriction ?? 0.5, restitution: material?.restitution ?? 0,
             density: density > 0 ? density * kgpu : 1000 * mpu ** 3, mass});
         colliderData.set(data.path, {data, owner});

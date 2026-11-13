@@ -85,6 +85,11 @@ inverse seconds. Explicit zero means no damping. During a physics drag, the
 grabbed body receives extra damping so off-centre grabs settle; releasing restores
 its configured rates and retains its current velocity.
 
+SDF-source collision meshes use convex decomposition. A small contact skin
+(up to 0.5 mm, capped at 1% of the mesh extent) stabilizes thin features without
+changing render geometry or mass. Decomposed shapes retain their face normals
+rather than clamping them across internal cuts, which can miss thin curved contacts.
+
 ## Needle Engine
 
 Inside a Needle `Behaviour`, use `this.context` as `context` in these examples.

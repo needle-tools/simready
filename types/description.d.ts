@@ -95,6 +95,7 @@ export type ColliderDescription = {
     restitution: number;
     density: number;
     mass?: MassDescription;
+    contactSkin?: number;
 };
 export type DriveDescription = {
     model: "force" | "acceleration";
