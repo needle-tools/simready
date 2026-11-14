@@ -348,7 +348,9 @@ Tools which rewrite an asset containing this extension MUST preserve:
 - Typed metadata, source identities and relationships.
 
 A node reorder MUST update `stageNode` and `bindings[].node`. A mesh reorder
-MUST update `snapshot.shapes[].mesh`. Companion-extension indices must also be
+MUST update `snapshot.shapes[].mesh`. A buffer-view reorder MUST update
+`metadataBuffers[].bufferView`. These views are live data even when no mesh
+accessor refers to them. Companion-extension indices must also be
 updated according to their own specifications. Strings containing USD paths or
 source instancer indices MUST NOT be treated as glTF table indices.
 
