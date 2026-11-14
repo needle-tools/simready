@@ -61,8 +61,11 @@ snapshot:WireSnapshot;
 usdMetadata:SimreadyMetadata;
 bindings:SimreadyBinding[];
 mappingIssues:PhysicsIssue[]}} SimreadyExtension */
+/** @typedef {import('./gltf/metadataBuffers.js').MetadataBuffer} MetadataBuffer */
+/** @typedef {Omit<SimreadyExtension,'version'>&{version:2,metadataBuffers:MetadataBuffer[]}} SimreadyBufferedExtension */
 
 import {isSnapshot, isMetadata, isArray, isBinding, isIssue, isWireSnapshot} from './validation.js';
+import {isMetadataBuffers} from './gltf/metadataBuffers.js';
 
 import {copyJson} from './json.js';
 
@@ -146,4 +149,13 @@ export function createSimreadyExtension({snapshot, bindings, stageNode, usdMetad
     const clonedSnapshot = copyJson(snapshot), clonedBindings = copyJson(bindings), clonedIssues = copyJson(mappingIssues);
     if (!isWireSnapshot(clonedSnapshot) || !isArray(clonedBindings) || !clonedBindings.every(isBinding) || !isArray(clonedIssues) || !clonedIssues.every(isIssue)) throw new TypeError('Invalid SimReady payload.');
     return {version: /** @type {const} */ (1), stageNode, snapshot: clonedSnapshot, usdMetadata: encodedMetadata, bindings: clonedBindings, mappingIssues: clonedIssues};
+}
+
+/** Build the buffered metadata contract; callers supply ordinary glTF buffer views.
+ * @param {Parameters<typeof createSimreadyExtension>[0]&{metadataBuffers:MetadataBuffer[]}} options
+ * @returns {SimreadyBufferedExtension}
+ */
+export function createSimreadyBufferedExtension({metadataBuffers,...options}) {
+    if(!isMetadataBuffers(metadataBuffers))throw new TypeError('Invalid SimReady metadata buffers.');
+    return {...createSimreadyExtension(options),version:2,metadataBuffers:/** @type {MetadataBuffer[]} */(copyJson(metadataBuffers))};
 }

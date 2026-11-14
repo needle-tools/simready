@@ -31,6 +31,7 @@ export {toGltfPhysicsSnapshot,fromGltfPhysicsSnapshot} from './gltf/coordinates.
 export {SIMREADY_EXTENSION} from './index.js';
 import {copyJson} from './json.js';
 import {isRecord,isWireSnapshot,isArray,isBinding,isMetadata,isIssue} from './validation.js';
+import {isMetadataBuffers,restoreMetadataBuffers} from './gltf/metadataBuffers.js';
 /** @param {unknown} value @returns {value is Object3D} */
 const isObject3D=value=>isRecord(value)&&value.isObject3D===true;
 /** @typedef {import('three').Mesh|import('three').Line|import('three').Points} CollisionPrimitive */
@@ -47,7 +48,8 @@ export class NeedleSimreadyLoaderPlugin{
  async afterRoot(result){
   const data=this.parser.json.extensions?.[SIMREADY_EXTENSION];if(!data)return;
   if(!isRecord(data))throw new Error('Invalid NEEDLE_simready payload.');
-  if(data.version!==1)throw new Error('Unsupported NEEDLE_simready version: '+data.version);
+  if(data.version!==1&&data.version!==2)throw new Error('Unsupported NEEDLE_simready version: '+data.version);
+  if(data.version===2?!isMetadataBuffers(data.metadataBuffers):data.metadataBuffers!==undefined)throw new Error('Invalid NEEDLE_simready metadata buffers.');
   if(!isWireSnapshot(data.snapshot)||!isArray(data.bindings)||!data.bindings.every(isBinding)||!isMetadata(data.usdMetadata))throw new Error('Invalid NEEDLE_simready payload.');
   if(data.mappingIssues!==undefined&&(!isArray(data.mappingIssues)||!data.mappingIssues.every(isIssue)))throw new Error('Invalid NEEDLE_simready mapping issues.');
   if(data.source)throw new Error('Embedded USD source is not supported by the SimReady runtime contract.');
@@ -105,6 +107,7 @@ export class NeedleSimreadyLoaderPlugin{
    (bodies,_warn,signal)=>{signal?.throwIfAborted();return bindVisuals({root,bodies,bindings:ownedBindings,worldSpace});};
   const metadata=encodeMetadata(data.usdMetadata),mappingIssues=copyJson(data.mappingIssues||[]);
   if(!isMetadata(metadata)||!isArray(mappingIssues)||!mappingIssues.every(isIssue))throw new Error('Invalid NEEDLE_simready metadata.');
+  if(data.version===2){if(!isMetadataBuffers(data.metadataBuffers))throw new Error('Invalid NEEDLE_simready metadata buffers.');await restoreMetadataBuffers(metadata,data.metadataBuffers,this.parser);}
   /** @param {Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>} [options] */
   async function createBoundMechanism(options={}){return withVisualController(root,async()=>{
    const{createMechanism}=await import('./kinematics.js');

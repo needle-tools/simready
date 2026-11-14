@@ -20,6 +20,13 @@ export function createSimreadyExtension({ snapshot, bindings, stageNode, usdMeta
     bindings: SimreadyBinding[];
     mappingIssues: PhysicsIssue[];
 };
+/** Build the buffered metadata contract; callers supply ordinary glTF buffer views.
+ * @param {Parameters<typeof createSimreadyExtension>[0]&{metadataBuffers:MetadataBuffer[]}} options
+ * @returns {SimreadyBufferedExtension}
+ */
+export function createSimreadyBufferedExtension({ metadataBuffers, ...options }: Parameters<typeof createSimreadyExtension>[0] & {
+    metadataBuffers: MetadataBuffer[];
+}): SimreadyBufferedExtension;
 export function encodeMetadata(value: unknown): unknown;
 export const SIMREADY_EXTENSION: "NEEDLE_simready";
 export type PhysicsVector = [number, number, number];
@@ -203,4 +210,9 @@ export type SimreadyExtension = {
     usdMetadata: SimreadyMetadata;
     bindings: SimreadyBinding[];
     mappingIssues: PhysicsIssue[];
+};
+export type MetadataBuffer = import("./gltf/metadataBuffers.js").MetadataBuffer;
+export type SimreadyBufferedExtension = Omit<SimreadyExtension, "version"> & {
+    version: 2;
+    metadataBuffers: MetadataBuffer[];
 };

@@ -63,11 +63,12 @@ properties to nodes, materials or meshes.
 
 | Property        | Type         | Required | Meaning                                                                              |
 | --------------- | ------------ | -------- | ------------------------------------------------------------------------------------ |
-| `version`       | integer      | Yes      | Extension version; MUST be `1`.                                                      |
+| `version`       | integer      | Yes      | `1` for inline metadata, `2` for buffered numeric arrays.                                                      |
 | `stageNode`     | integer      | Yes      | Index into glTF `nodes`, identifying the asset-local reference root.                          |
 | `snapshot`      | object       | Yes      | Physics data in glTF coordinates and SI units.                               |
 | `bindings`      | object array | Yes      | Connections between glTF nodes and source identities.                                |
 | `usdMetadata`   | object       | Yes      | Typed semantic data; empty `stage` and `prims` are valid.                            |
+| `metadataBuffers` | object array | Version 2 | Typed numeric arrays stored in glTF buffer views. |
 | `mappingIssues` | object array | No       | Descriptions of data without an exact companion-extension projection. Default: `[]`. |
 
 Objects MAY include `extensions`, `extras` and additional members. 
@@ -295,6 +296,32 @@ for visual shader parameters merely because they share a material prim.
 Variant choices and selections describe the composed configuration. They do
 not embed alternate payloads, source layers or alternate geometry. Semantic
 time samples do not implicitly create glTF animation channels.
+
+### Buffered numeric arrays (version 2)
+
+Version 1 remains valid and stores semantic values inline. Version 2 MUST contain
+a non-empty `metadataBuffers` array. Each entry replaces one `null` placeholder
+inside `usdMetadata` with the numeric array described by that entry:
+
+```json
+{"path":["prims",0,"attributes",0,"value"],"bufferView":3,"componentType":"float32","shape":[10000,4]}
+```
+
+`path` is a sequence of own-property names and zero-based array indices, relative
+to `usdMetadata`. The destination MUST exist and MUST be `null`. Paths MUST NOT
+repeat. `shape` contains one to eight positive integer dimensions. Values use
+row-major array order and little-endian IEEE 754 `float32` or `float64` storage.
+The buffer view byte length MUST equal the product of the dimensions times four
+or eight bytes respectively. All stored values MUST be finite. Tagged nonfinite
+numbers and exact integers remain inline. A producer MUST use `float64` whenever
+`float32` would change a value.
+
+Consumers MUST restore the arrays before exposing semantic metadata. Buffer-view
+bounds, shape products, placeholders and paths require semantic validation in
+addition to JSON Schema validation. A version 1 payload MUST NOT contain
+`metadataBuffers`. Producers SHOULD keep small arrays inline and use version 1
+when no buffered arrays are needed. Consumers that only support version 1 MUST
+reject version 2 when complete SimReady semantics are required.
 
 ## Related extensions
 
