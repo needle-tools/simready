@@ -33,6 +33,7 @@ import {copyJson} from './json.js';
 import {isRecord,isWireSnapshot,isArray,isBinding,isMetadata,isIssue} from './validation.js';
 import {isMetadataBuffers,restoreMetadataBuffers} from './gltf/metadataBuffers.js';
 import {limitImageRequests} from './gltf/limitImages.js';
+import {normalizeTextureTransforms} from './gltf/textureTransforms.js';
 /** @param {unknown} value @returns {value is Object3D} */
 const isObject3D=value=>isRecord(value)&&value.isObject3D===true;
 /** @typedef {import('three').Mesh|import('three').Line|import('three').Points} CollisionPrimitive */
@@ -44,7 +45,7 @@ const runtimes=new WeakMap();
 /** Attach lazy simulation/interaction factories; loading never starts simulation. */
 export class NeedleSimreadyLoaderPlugin{
  /** @param {SimreadyParser} parser */
- constructor(parser){this.parser=parser;this.name=SIMREADY_EXTENSION;if(parser.json.extensions?.[SIMREADY_EXTENSION])limitImageRequests(parser);}
+ constructor(parser){this.parser=parser;this.name=SIMREADY_EXTENSION;if(parser.json.extensions?.[SIMREADY_EXTENSION]){limitImageRequests(parser);normalizeTextureTransforms(parser);}}
  /** @param {SimreadyLoadResult} result */
  async afterRoot(result){
   const data=this.parser.json.extensions?.[SIMREADY_EXTENSION];if(!data)return;
