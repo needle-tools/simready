@@ -41,6 +41,10 @@ scene.add(asset.scene);
 const runtime = getSimreadyRuntime(asset);
 ```
 
+For SimReady assets, the loader bounds concurrent image reads so large embedded
+atlases do not exhaust the browser's Blob memory quota. Image failures retain
+Three.js's normal error reporting.
+
 For joint posing, create a mechanism once:
 
 ```js
