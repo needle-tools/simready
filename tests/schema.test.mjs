@@ -68,7 +68,7 @@ test('examples load and joint posing moves the bound panel in the authored frame
    shape.points=accessorValues(asset,primitive.attributes.POSITION);shape.indices=accessorValues(asset,primitive.indices);delete shape.mesh;
   }
   assert.deepEqual(runtime.snapshot,expected);
-  assert.deepEqual(runtime.usdMetadata,asset.extensions.NEEDLE_simready.usdMetadata);
+  assert.equal(runtime.usdMetadata,undefined);assert.deepEqual(runtime.semantics,asset.extensions.NEEDLE_simready.semantics);
   if(name==='semantic-labels.gltf')continue;
   const visual=runtime.bindings.find(binding=>binding.body==='/Cabinet/Door'&&binding.object.isMesh).object;
   const before=visual.getWorldPosition(new Vector3());
@@ -99,38 +99,27 @@ test('the schema rejects malformed versions, frames, wire geometry and semantic 
   ...['sphere','capsule','cylinder','cone'].map(type=>data=>{data.snapshot.shapes[0].type=type;delete data.snapshot.shapes[0].radius;}),
   ...['capsule','cylinder','cone'].map(type=>data=>{Object.assign(data.snapshot.shapes[0],{type,radius:1});delete data.snapshot.shapes[0].halfHeight;}),
   data=>{data.snapshot.joints[0].drive={enabled:true,targetPosition:0};},
-  data=>{data.usdMetadata.prims[0].attributes[0].samples=[{time:0}];},
-  data=>{data.usdMetadata.stage.custom={nested:[{$usdInteger:'1.5'}]};},
-  data=>{data.usdMetadata.stage.custom={nested:{$usdNumber:'infinite'}};},
+  data=>{data.semantics[0].labels=[123];},
+  data=>{data.usdMetadata={prims:[]};},
+  data=>{data.metadataBuffers=[];},
   data=>{data.source={archive:'original.usdz'};},
  ];
  for(const mutate of cases){const data=payload();mutate(data);assert.equal(validate(data),false,mutate.toString());}
 });
 
-test('semantic tags, unknown source properties and optional defaults remain representable',()=>{
- const data=payload();data.additionalVendorField={label:'extension data'};
- data.usdMetadata.stage.customLayerData={nested:[{$usdNumber:'Infinity'},{$usdNumber:'-Infinity'},{$usdNumber:'NaN'},{$usdInteger:'18446744073709551615'},{$usdValue:'(0, 1, 2)'}]};
- data.snapshot.joints[0].type='vendor:futureJoint';
- data.snapshot.shapes[0].type='vendor:futureShape';
- data.snapshot.unsupported=[{path:'',reason:'Asset-wide diagnostic'}];
- valid(data);
- delete data.mappingIssues;valid(data);
+test('runtime schema excludes arbitrary properties while legacy decoding stays available',async()=>{
+ const data=payload();data.additionalVendorField={label:'source data'};assert.equal(validate(data),false);
+ const legacy=payload();legacy.version=1;delete legacy.semantics;legacy.usdMetadata={version:1,time:0,stage:{},prims:[{path:'/Cabinet',type:'Xform',attributes:[{name:'user:legacy',type:'string',value:'read compatibility'}]}]};
+ const asset=clone(panel);asset.extensions.NEEDLE_simready=legacy;
+ const loaded=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(asset),'');assert.deepEqual(loaded.userData.simready.usdMetadata,legacy.usdMetadata);
+ assert.equal(createSimreadyExtension(legacy).usdMetadata,undefined);
 });
-
-test('writer and loader reject missing metadata values and invalid binding identities',async()=>{
- for(const mutate of [
-  data=>{data.bindings[0].path='';},
-  data=>{data.bindings[0].node=-1;},
-  data=>{delete data.usdMetadata.prims[0].attributes[0].value;},
-  data=>{data.usdMetadata.prims[0].attributes[0].samples=[{time:0}];},
- ]){
-  const data=payload();mutate(data);
-  assert.throws(()=>createSimreadyExtension(data),/Invalid/);
-  const asset=clone(panel);asset.extensions.NEEDLE_simready=data;
-  await assert.rejects(registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(asset),''),/Invalid/);
+test('writer and loader reject invalid binding identities and runtime labels',async()=>{
+ for(const mutate of [data=>{data.bindings[0].path='';},data=>{data.bindings[0].node=-1;},data=>{data.semantics[0].labels=[123];}]){
+  const data=payload();mutate(data);assert.throws(()=>createSimreadyExtension(data),/Invalid/);
+  const asset=clone(panel);asset.extensions.NEEDLE_simready=data;await assert.rejects(registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(asset),''),/Invalid/);
  }
 });
-
 test('wire data uses fixed glTF units and radian joint limits',()=>{
  const data=payload(),written=createSimreadyExtension(data);
  for(const key of ['metersPerUnit','kilogramsPerUnit','upAxis'])assert.equal(Object.hasOwn(written.snapshot,key),false);

@@ -58,7 +58,9 @@ During manipulation, fixed attachments retain their authored rest offset. Incons
 
 Use the joint paths stored in your asset; `/Assembly/Hinge` and `/Assembly/Slide`
 are examples. `runtime.snapshot` contains the bodies, colliders and joints in glTF metres and radians, and
-`runtime.usdMetadata` contains the retained schema metadata.
+`runtime.semantics` contains defined semantic labels attached to exported identities.
+New exports use version 3 and exclude source USD property bags, authoring arrays and vendor metadata.
+The loader reads older version 1/2 files for compatibility; their `runtime.usdMetadata` is legacy input data.
 
 For dynamics without an existing physics host, install Rapier:
 

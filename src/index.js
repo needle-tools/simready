@@ -60,14 +60,18 @@ stageNode:number;
 snapshot:WireSnapshot;
 usdMetadata:SimreadyMetadata;
 bindings:SimreadyBinding[];
-mappingIssues:PhysicsIssue[]}} SimreadyExtension */
+mappingIssues:PhysicsIssue[]}} LegacySimreadyExtension */
 /** @typedef {import('./gltf/metadataBuffers.js').MetadataBuffer} MetadataBuffer */
-/** @typedef {Omit<SimreadyExtension,'version'>&{version:2,metadataBuffers:MetadataBuffer[]}} SimreadyBufferedExtension */
+/** @typedef {Omit<LegacySimreadyExtension,'version'>&{version:2,metadataBuffers:MetadataBuffer[]}} SimreadyBufferedExtension */
+/** Semantic labels attach to an exported binding identity, not a USD prim description.
+ * @typedef {{path:string,taxonomy:string,labels:string[]}} SimreadySemanticLabels */
+/** @typedef {{version:3,stageNode:number,snapshot:WireSnapshot,bindings:SimreadyBinding[],semantics:SimreadySemanticLabels[],mappingIssues:PhysicsIssue[]}} SimreadyRuntimeExtension */
+/** @typedef {SimreadyRuntimeExtension|LegacySimreadyExtension|SimreadyBufferedExtension} SimreadyExtension */
 
 import {isSnapshot, isMetadata, isArray, isBinding, isIssue, isWireSnapshot} from './validation.js';
-import {isMetadataBuffers} from './gltf/metadataBuffers.js';
 
 import {copyJson} from './json.js';
+import {runtimeSnapshot,isRuntimeSemantics} from './gltf/runtimeContract.js';
 
 /** Encode semantic metadata without silently replacing infinities with null.
  * @param {unknown} value @returns {unknown}
@@ -131,7 +135,7 @@ export function getSnapshotIssues(snapshot){
 
 /** Build the versioned glTF contract; geometry stays in ordinary glTF meshes. */
 /** @param {{snapshot: WireSnapshot, bindings: SimreadyBinding[], stageNode: number, usdMetadata?: SimreadyMetadata, mappingIssues?: PhysicsIssue[]}} options */
-export function createSimreadyExtension({snapshot, bindings, stageNode, usdMetadata = {version: 1, time: 0, stage: {}, prims: []}, mappingIssues = []}) {
+function validateWireContract({snapshot, bindings, stageNode, usdMetadata = {version: 1, time: 0, stage: {}, prims: []}, mappingIssues = []}) {
     validateSnapshot(snapshot);
     if (!isWireSnapshot(snapshot)) throw new TypeError('Invalid SimReady payload.');
     if (!Number.isInteger(stageNode) || stageNode < 0 || !Array.isArray(bindings)) throw new TypeError('SimReady requires a stage node and bindings.');
@@ -151,11 +155,18 @@ export function createSimreadyExtension({snapshot, bindings, stageNode, usdMetad
     return {version: /** @type {const} */ (1), stageNode, snapshot: clonedSnapshot, usdMetadata: encodedMetadata, bindings: clonedBindings, mappingIssues: clonedIssues};
 }
 
-/** Build the buffered metadata contract; callers supply ordinary glTF buffer views.
- * @param {Parameters<typeof createSimreadyExtension>[0]&{metadataBuffers:MetadataBuffer[]}} options
- * @returns {SimreadyBufferedExtension}
+/** Export only runtime physics and defined semantic labels. Legacy USD property
+ * bags are intentionally not part of this contract.
+ * @param {{snapshot:WireSnapshot,stageNode:number,bindings:SimreadyBinding[],semantics?:SimreadySemanticLabels[],mappingIssues?:PhysicsIssue[]}} options
+ * @returns {SimreadyRuntimeExtension}
  */
-export function createSimreadyBufferedExtension({metadataBuffers,...options}) {
-    if(!isMetadataBuffers(metadataBuffers))throw new TypeError('Invalid SimReady metadata buffers.');
-    return {...createSimreadyExtension(options),version:2,metadataBuffers:/** @type {MetadataBuffer[]} */(copyJson(metadataBuffers))};
+export function createSimreadyRuntimeExtension({snapshot,stageNode,bindings,semantics=[],mappingIssues=[]}){
+ const physics=runtimeSnapshot(snapshot);
+ const legacy=validateWireContract({snapshot:physics,stageNode,bindings:bindings.map(({node,path,body})=>({node,path,...(body?{body}:{})})),mappingIssues});
+ if(!isRuntimeSemantics(semantics)||semantics.some(record=>!bindings.some(binding=>binding.path===record.path)))throw new TypeError('Invalid SimReady runtime semantic labels.');
+ return {version:3,stageNode:legacy.stageNode,snapshot:legacy.snapshot,bindings:legacy.bindings,semantics:/** @type {SimreadySemanticLabels[]} */(copyJson(semantics)),mappingIssues:legacy.mappingIssues};
 }
+
+/** Build the runtime interchange contract. Source metadata is not an export option.
+ * @param {Parameters<typeof createSimreadyRuntimeExtension>[0]} options */
+export function createSimreadyExtension(options){return createSimreadyRuntimeExtension(options);}

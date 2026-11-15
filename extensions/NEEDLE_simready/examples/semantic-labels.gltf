@@ -355,75 +355,45 @@
   ],
   "extensions": {
     "NEEDLE_simready": {
-      "version": 1,
+      "version": 3,
       "stageNode": 0,
       "snapshot": {
-        "scenes": [],
-        "materials": [],
-        "groups": [],
         "bodies": [],
         "shapes": [],
         "joints": [],
+        "materials": [],
+        "groups": [],
+        "scenes": [],
         "unsupported": []
-      },
-      "usdMetadata": {
-        "version": 1,
-        "time": 0,
-        "stage": {},
-        "prims": [
-          {
-            "path": "/Objects/Box",
-            "type": "Mesh",
-            "metadata": {
-              "apiSchemas": [
-                "SemanticsLabelsAPI:class"
-              ]
-            },
-            "attributes": [
-              {
-                "name": "semantics:labels:class",
-                "type": "token[]",
-                "value": [
-                  "box"
-                ]
-              }
-            ]
-          },
-          {
-            "path": "/Objects/Ball",
-            "type": "Mesh",
-            "metadata": {
-              "apiSchemas": [
-                "SemanticsLabelsAPI:class"
-              ]
-            },
-            "attributes": [
-              {
-                "name": "semantics:labels:class",
-                "type": "token[]",
-                "value": [
-                  "ball"
-                ]
-              }
-            ]
-          }
-        ]
       },
       "bindings": [
         {
           "node": 1,
-          "path": "/Objects/Box",
-          "body": ""
+          "path": "/Objects/Box"
         },
         {
           "node": 2,
-          "path": "/Objects/Ball",
-          "body": ""
+          "path": "/Objects/Ball"
         },
         {
           "node": 3,
-          "path": "/Objects/Display",
-          "body": ""
+          "path": "/Objects/Display"
+        }
+      ],
+      "semantics": [
+        {
+          "path": "/Objects/Box",
+          "taxonomy": "class",
+          "labels": [
+            "box"
+          ]
+        },
+        {
+          "path": "/Objects/Ball",
+          "taxonomy": "class",
+          "labels": [
+            "ball"
+          ]
         }
       ],
       "mappingIssues": []

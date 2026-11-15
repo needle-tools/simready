@@ -11,7 +11,7 @@ exports the composed configuration at the selected time. Rendered instances
 become independently bound glTF nodes, with their source identities retained.
 Original or preview textures can be selected without changing the viewed asset.
 
-Authored SimReady metadata and USD physics data enable the extension. Ordinary
+Supported semantic labels and USD physics data enable the extension. Ordinary
 models export as ordinary glTF. Geometry follows the selected visibility and
 purpose configuration; schema metadata alone does not include the geometry of
 an excluded guide or grasp curve.
@@ -35,7 +35,7 @@ joints and metres for linear joints loaded from glTF.
 | Analytic collider | `KHR_implicit_shapes` definition referenced by a collider node. |
 | Triangle mesh or convex hull | Ordinary collision mesh referenced by the collider. |
 | Fixed, revolute, prismatic or unlimited spherical joint | Two attachment nodes and a Khronos joint definition, with representable limits and drives. |
-| Other source semantics | `NEEDLE_simready` snapshot and typed metadata; projection differences appear in `mappingIssues`. |
+| Semantic labels | Defined runtime `semantics` records; unsupported source features remain conversion diagnostics and external source evidence. |
 
 The implemented proposal reference is
 [`glTF_Physics` at `9dc61cb3474ff9a51f58d3592f79d5c9e572056a`](https://github.com/eoineoineoin/glTF_Physics/tree/9dc61cb3474ff9a51f58d3592f79d5c9e572056a/extensions/2.0/Khronos).
@@ -89,15 +89,15 @@ organizes OpenUSD requirements into capabilities, features and profiles.
 The extension carries their data and identities; it does not run the Foundation
 validation rules or certify a profile.
 
-Physics is represented by the typed snapshot. Labels, taxonomy identifiers,
-non-visual material attributes and vendor settings remain named, typed semantic
-properties. Runtime-specific PhysX, Newton or MuJoCo variant selections are
-recorded with the composed configuration. Grasp and gripper properties can be
-read by an application without binding them to a particular physics engine.
+Physics is represented by the typed runtime snapshot. Labels and taxonomy
+identifiers use explicit `semantics` records. Source properties, authoring
+schemas, vendor settings and variant records are not archived in the GLB.
+Unknown or unimplemented source features require an explicit conversion and
+runtime implementation; preserving their authored values is not support.
 
 Applications which need a sensor renderer, robotics controller or Foundation
-conformance report supply those domain implementations. Preserving the inputs
-and running their algorithms are separate capabilities.
+conformance report supply those domain implementations and use the original
+source evidence outside the runtime asset.
 
 ## Current gaps
 

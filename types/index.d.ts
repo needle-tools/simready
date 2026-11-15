@@ -4,29 +4,21 @@ export function validateSnapshot(snapshot: unknown): PhysicsSnapshot;
 /** Invalid references are distinct from a solver's feature limitations. */
 /** @param {PhysicsSnapshot} snapshot */
 export function getSnapshotIssues(snapshot: PhysicsSnapshot): PhysicsIssue[];
-/** Build the versioned glTF contract; geometry stays in ordinary glTF meshes. */
-/** @param {{snapshot: WireSnapshot, bindings: SimreadyBinding[], stageNode: number, usdMetadata?: SimreadyMetadata, mappingIssues?: PhysicsIssue[]}} options */
-export function createSimreadyExtension({ snapshot, bindings, stageNode, usdMetadata, mappingIssues }: {
-    snapshot: WireSnapshot;
-    bindings: SimreadyBinding[];
-    stageNode: number;
-    usdMetadata?: SimreadyMetadata;
-    mappingIssues?: PhysicsIssue[];
-}): {
-    version: 1;
-    stageNode: number;
-    snapshot: WireSnapshot;
-    usdMetadata: SimreadyMetadata;
-    bindings: SimreadyBinding[];
-    mappingIssues: PhysicsIssue[];
-};
-/** Build the buffered metadata contract; callers supply ordinary glTF buffer views.
- * @param {Parameters<typeof createSimreadyExtension>[0]&{metadataBuffers:MetadataBuffer[]}} options
- * @returns {SimreadyBufferedExtension}
+/** Export only runtime physics and defined semantic labels. Legacy USD property
+ * bags are intentionally not part of this contract.
+ * @param {{snapshot:WireSnapshot,stageNode:number,bindings:SimreadyBinding[],semantics?:SimreadySemanticLabels[],mappingIssues?:PhysicsIssue[]}} options
+ * @returns {SimreadyRuntimeExtension}
  */
-export function createSimreadyBufferedExtension({ metadataBuffers, ...options }: Parameters<typeof createSimreadyExtension>[0] & {
-    metadataBuffers: MetadataBuffer[];
-}): SimreadyBufferedExtension;
+export function createSimreadyRuntimeExtension({ snapshot, stageNode, bindings, semantics, mappingIssues }: {
+    snapshot: WireSnapshot;
+    stageNode: number;
+    bindings: SimreadyBinding[];
+    semantics?: SimreadySemanticLabels[];
+    mappingIssues?: PhysicsIssue[];
+}): SimreadyRuntimeExtension;
+/** Build the runtime interchange contract. Source metadata is not an export option.
+ * @param {Parameters<typeof createSimreadyRuntimeExtension>[0]} options */
+export function createSimreadyExtension(options: Parameters<typeof createSimreadyRuntimeExtension>[0]): SimreadyRuntimeExtension;
 export function encodeMetadata(value: unknown): unknown;
 export const SIMREADY_EXTENSION: "NEEDLE_simready";
 export type PhysicsVector = [number, number, number];
@@ -205,7 +197,7 @@ export type GltfPhysicsSnapshot = Omit<PhysicsSnapshot, "metersPerUnit" | "kilog
 export type WireSnapshot = Omit<GltfPhysicsSnapshot, "shapes"> & {
     shapes: WireShape[];
 };
-export type SimreadyExtension = {
+export type LegacySimreadyExtension = {
     version: 1;
     stageNode: number;
     snapshot: WireSnapshot;
@@ -214,7 +206,24 @@ export type SimreadyExtension = {
     mappingIssues: PhysicsIssue[];
 };
 export type MetadataBuffer = import("./gltf/metadataBuffers.js").MetadataBuffer;
-export type SimreadyBufferedExtension = Omit<SimreadyExtension, "version"> & {
+export type SimreadyBufferedExtension = Omit<LegacySimreadyExtension, "version"> & {
     version: 2;
     metadataBuffers: MetadataBuffer[];
 };
+/**
+ * Semantic labels attach to an exported binding identity, not a USD prim description.
+ */
+export type SimreadySemanticLabels = {
+    path: string;
+    taxonomy: string;
+    labels: string[];
+};
+export type SimreadyRuntimeExtension = {
+    version: 3;
+    stageNode: number;
+    snapshot: WireSnapshot;
+    bindings: SimreadyBinding[];
+    semantics: SimreadySemanticLabels[];
+    mappingIssues: PhysicsIssue[];
+};
+export type SimreadyExtension = SimreadyRuntimeExtension | LegacySimreadyExtension | SimreadyBufferedExtension;

@@ -8,7 +8,7 @@
 /** @typedef {import('./rapier-types.js').RigidBody} RigidBody */
 /** @typedef {import('./rapier-types.js').World} World */
 /** @typedef {import('./three.js').ObjectBinding} ObjectBinding */
-/** @typedef {{readonly snapshot:import('./index.js').GltfPhysicsSnapshot,readonly usdMetadata:SimreadyMetadata,readonly root:Object3D,
+/** @typedef {{readonly snapshot:import('./index.js').GltfPhysicsSnapshot,readonly usdMetadata?:SimreadyMetadata,readonly semantics:import('./index.js').SimreadySemanticLabels[],readonly root:Object3D,
  * readonly bindings:ObjectBinding[],readonly mappingIssues:PhysicsIssue[],
  * createMechanism(options?:Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>):Promise<Mechanism&{root:Object3D}>,
  * createSimulation:CreateBoundSimulation}} SimreadyRuntime */
@@ -34,6 +34,7 @@ import {isRecord,isWireSnapshot,isArray,isBinding,isMetadata,isIssue} from './va
 import {isMetadataBuffers,restoreMetadataBuffers} from './gltf/metadataBuffers.js';
 import {limitImageRequests} from './gltf/limitImages.js';
 import {normalizeTextureTransforms} from './gltf/textureTransforms.js';
+import {isRuntimeSemantics,isRuntimeSnapshot} from './gltf/runtimeContract.js';
 /** @param {unknown} value @returns {value is Object3D} */
 const isObject3D=value=>isRecord(value)&&value.isObject3D===true;
 /** @typedef {import('three').Mesh|import('three').Line|import('three').Points} CollisionPrimitive */
@@ -50,9 +51,14 @@ export class NeedleSimreadyLoaderPlugin{
  async afterRoot(result){
   const data=this.parser.json.extensions?.[SIMREADY_EXTENSION];if(!data)return;
   if(!isRecord(data))throw new Error('Invalid NEEDLE_simready payload.');
-  if(data.version!==1&&data.version!==2)throw new Error('Unsupported NEEDLE_simready version: '+data.version);
+  if(data.version!==1&&data.version!==2&&data.version!==3)throw new Error('Unsupported NEEDLE_simready version: '+data.version);
   if(data.version===2?!isMetadataBuffers(data.metadataBuffers):data.metadataBuffers!==undefined)throw new Error('Invalid NEEDLE_simready metadata buffers.');
-  if(!isWireSnapshot(data.snapshot)||!isArray(data.bindings)||!data.bindings.every(isBinding)||!isMetadata(data.usdMetadata))throw new Error('Invalid NEEDLE_simready payload.');
+  if(!isWireSnapshot(data.snapshot)||!isArray(data.bindings)||!data.bindings.every(isBinding)||(data.version===3?!isRuntimeSemantics(data.semantics):!isMetadata(data.usdMetadata)))throw new Error('Invalid NEEDLE_simready payload.');
+  if(data.version===3){
+   if(Object.keys(data).some(key=>!['version','stageNode','snapshot','bindings','semantics','mappingIssues','extensions','extras'].includes(key))||!isRuntimeSnapshot(data.snapshot)||data.bindings.some(binding=>Object.keys(binding).some(key=>!['node','path','body'].includes(key))))throw new Error('Source properties are not valid SimReady runtime data.');
+   const labels=data.semantics,bindings=data.bindings;
+   if(!isRuntimeSemantics(labels)||labels.some(record=>!bindings.some(binding=>binding.path===record.path)))throw new Error('Invalid SimReady semantic target.');
+  }
   if(data.mappingIssues!==undefined&&(!isArray(data.mappingIssues)||!data.mappingIssues.every(isIssue)))throw new Error('Invalid NEEDLE_simready mapping issues.');
   if(data.source)throw new Error('Embedded USD source is not supported by the SimReady runtime contract.');
   const cloned=copyJson(data.snapshot);
@@ -107,9 +113,12 @@ export class NeedleSimreadyLoaderPlugin{
    /** @param {ReadonlyMap<string,{data:import('./index.js').PhysicsBody,body:import('./kinematics.js').BodyPose}>} bodies
     * @param {(item:{path:string,type?:string},reason:string)=>void} _warn @param {AbortSignal} [signal] */
    (bodies,_warn,signal)=>{signal?.throwIfAborted();return bindVisuals({root,bodies,bindings:ownedBindings,worldSpace});};
-  const metadata=encodeMetadata(data.usdMetadata),mappingIssues=copyJson(data.mappingIssues||[]);
-  if(!isMetadata(metadata)||!isArray(mappingIssues)||!mappingIssues.every(isIssue))throw new Error('Invalid NEEDLE_simready metadata.');
-  if(data.version===2){if(!isMetadataBuffers(data.metadataBuffers))throw new Error('Invalid NEEDLE_simready metadata buffers.');await restoreMetadataBuffers(metadata,data.metadataBuffers,this.parser);}
+  const metadata=data.version===3?undefined:encodeMetadata(data.usdMetadata),mappingIssues=copyJson(data.mappingIssues||[]);
+  if((data.version!==3&&!isMetadata(metadata))||!isArray(mappingIssues)||!mappingIssues.every(isIssue))throw new Error('Invalid NEEDLE_simready metadata.');
+  if(data.version===2){if(!isMetadata(metadata)||!isMetadataBuffers(data.metadataBuffers))throw new Error('Invalid NEEDLE_simready metadata buffers.');await restoreMetadataBuffers(metadata,data.metadataBuffers,this.parser);}
+  const semantics=data.version===3?copyJson(data.semantics):[];
+  if(!isRuntimeSemantics(semantics))throw new Error('Invalid SimReady runtime semantic labels.');
+  for(const binding of data.bindings){const labels=semantics.filter(record=>record.path===binding.path);if(labels.length)(await node(binding.node)).userData.simreadyLabels=copyJson(labels.map(({taxonomy,labels})=>({taxonomy,labels})));}
   /** @param {Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>} [options] */
   async function createBoundMechanism(options={}){return withVisualController(root,async()=>{
    const{createMechanism}=await import('./kinematics.js');
@@ -132,7 +141,7 @@ export class NeedleSimreadyLoaderPlugin{
    return Object.assign(await createSimulation(simulationOptions),{root});
   });}
   result.userData||={};
-  const runtime={snapshot,usdMetadata:metadata,root,bindings:ownedBindings,mappingIssues,createMechanism:createBoundMechanism,
+  const runtime={snapshot,...(isMetadata(metadata)?{usdMetadata:metadata}:{}),semantics,root,bindings:ownedBindings,mappingIssues,createMechanism:createBoundMechanism,
    createSimulation:/** @type {CreateBoundSimulation} */ (/** @type {unknown} */ (createBoundSimulation))};
   result.userData.simready=runtime;
   runtimes.set(result.scene,runtime);runtimes.set(result,runtime);runtimes.set(runtime,runtime);

@@ -1,5 +1,10 @@
 # Changelog
 
+## Runtime interchange correction
+
+- Write version 3 runtime physics and semantic labels without source USD property bags or numeric authoring archives.
+- Keep version 1/2 loading for compatibility; new exports do not reproduce those source metadata formats.
+
 ## Unreleased
 
 - Preserve per-body gravity and explicit continuous-collision choices in snapshots and both physics adapters.

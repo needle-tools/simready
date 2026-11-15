@@ -23,16 +23,14 @@ meanings defined by [BCP 14](https://www.rfc-editor.org/info/bcp14).
 
 `NEEDLE_simready` carries simulation data and source identities alongside ordinary
 glTF geometry, materials and textures. It connects rendered nodes to rigid bodies,
-retains collision geometry and joint constraints, and preserves typed semantic
-properties that have no equivalent in the glTF visual model.
+retains collision geometry and joint constraints, and carries defined semantic labels with runtime targets.
 
 The extension separates three kinds of data:
 
 - **Visuals:** ordinary glTF nodes, meshes, materials, cameras and lights.
 - **Physics:** a glTF-coordinate snapshot of bodies, colliders, joints,
   materials, scenes, collision groups and articulations.
-- **Semantics:** typed source properties, labels, relationships, applied schemas,
-  profile metadata and other authored information.
+- **Semantics:** labels and taxonomy identifiers attached to exported binding identities.
 
 A consumer can inspect the same asset, pose its joints, attach it to a simulator,
 or use its labels in another application. Loading MUST NOT start simulation.
@@ -63,15 +61,14 @@ properties to nodes, materials or meshes.
 
 | Property        | Type         | Required | Meaning                                                                              |
 | --------------- | ------------ | -------- | ------------------------------------------------------------------------------------ |
-| `version`       | integer      | Yes      | `1` for inline metadata, `2` for buffered numeric arrays.                                                      |
+| `version`       | integer      | Yes      | `3` for runtime interchange.                                                      |
 | `stageNode`     | integer      | Yes      | Index into glTF `nodes`, identifying the asset-local reference root.                          |
 | `snapshot`      | object       | Yes      | Physics data in glTF coordinates and SI units.                               |
 | `bindings`      | object array | Yes      | Connections between glTF nodes and source identities.                                |
-| `usdMetadata`   | object       | Yes      | Typed semantic data; empty `stage` and `prims` are valid.                            |
-| `metadataBuffers` | object array | Version 2 | Typed numeric arrays stored in glTF buffer views. |
+| `semantics` | object array | Yes | Defined `{path, taxonomy, labels}` records attached to exported binding identities. |
 | `mappingIssues` | object array | No       | Descriptions of data without an exact companion-extension projection. Default: `[]`. |
 
-Objects MAY include `extensions`, `extras` and additional members. 
+Version 3 members follow the closed runtime schema. Standard glTF `extensions` and `extras` remain available for explicitly defined application contracts.
 
 Render geometry and textures use the ordinary glTF representation.
 
@@ -253,75 +250,28 @@ A bound visual keeps its initial offset relative to its owning body. Moving the
 body MUST move all its bound visuals, including dependent handles or attachments.
 An importer MUST NOT infer ownership solely from the visual node's parent or name.
 
-## Semantic metadata
+## Runtime semantics
 
-`usdMetadata` contains `{version: 1, time, stage, prims}`. `time` is the source
-sample time, not a duration in seconds. `stage` is a dictionary of authored
-stage metadata. Each prim contains `path` and `type`, and MAY include:
+Version 3 stores `semantics` as `{path, taxonomy, labels}` records. `path` MUST
+identify an exported binding. `taxonomy` is a non-empty classification namespace;
+`labels` is a non-empty array of non-empty strings. A consumer attaches these labels
+to the matching exported objects. Labels do not execute physics or reconstruct USD.
 
-- `active: false` for an inactive prim; omission means active.
-- `metadata`, including applied schemas and custom data.
-- `attributes`: `{name, type, value, metadata?, connections?, default?, samples?}`.
-  Each sample is `{time, value}`. `type` retains the source USD type name.
-- `relationships`: `{name, targets, metadata?}`.
-- `variants`: `{name, selection, choices}`.
+The snapshot uses a closed runtime vocabulary in
+[runtime-snapshot.schema.json](schema/runtime-snapshot.schema.json). Geometry,
+textures and visual attributes use ordinary glTF. Snapshot values use the units
+and frame documented above. Source identities are opaque references only.
 
-Authored metadata retains its source types and values. It does not change the
-coordinate system or units of the physics snapshot.
+Producers MUST NOT embed USD property bags, applied schema lists, source primvars,
+source transforms, variant authoring records, source shader graphs, arbitrary
+vendor attributes or numeric archives of those values. Unimplemented source
+features remain explicit conversion diagnostics and external source evidence;
+retaining their authored values is not runtime support.
 
-Paths, property names, namespace names, taxonomy identifiers and source asset
-references are strings, not glTF indices. Namespaces MUST remain intact.
-`omni:simready:nonvisual:*`, `semantics:labels:*`, vendor properties and
-unknown schemas can coexist without changing the extension format.
-
-Semantic values use JSON with reserved single-member objects for values JSON
-cannot otherwise express:
-
-| Representation                           | Meaning                                                                |
-| ---------------------------------------- | ---------------------------------------------------------------------- |
-| `{"$usdNumber":"Infinity"}`              | Positive infinity. `-Infinity` and `NaN` are also defined.             |
-| `{"$usdInteger":"18446744073709551615"}` | Exact decimal integer, independent of JavaScript's safe-integer range. |
-| `{"$usdValue":"..."}`                    | Source value text retained together with its declared USD type.        |
-
-These tags also work in nested dictionaries, arrays and time samples. Their
-reserved keys MUST NOT be repurposed. Ordinary numbers and small integers can
-remain JSON numbers; typed buffers become arrays.
-
-Static properties already represented by the snapshot SHOULD NOT be duplicated.
-Source render meshes, material face lists and visual shader graphs SHOULD use
-the glTF representation or a separate appearance extension. Semantic labels,
-non-visual material properties and other nonvisual data MUST NOT be mistaken
-for visual shader parameters merely because they share a material prim.
-
-Variant choices and selections describe the composed configuration. They do
-not embed alternate payloads, source layers or alternate geometry. Semantic
-time samples do not implicitly create glTF animation channels.
-
-### Buffered numeric arrays (version 2)
-
-Version 1 remains valid and stores semantic values inline. Version 2 MUST contain
-a non-empty `metadataBuffers` array. Each entry replaces one `null` placeholder
-inside `usdMetadata` with the numeric array described by that entry:
-
-```json
-{"path":["prims",0,"attributes",0,"value"],"bufferView":3,"componentType":"float32","shape":[10000,4]}
-```
-
-`path` is a sequence of own-property names and zero-based array indices, relative
-to `usdMetadata`. The destination MUST exist and MUST be `null`. Paths MUST NOT
-repeat. `shape` contains one to eight positive integer dimensions. Values use
-row-major array order and little-endian IEEE 754 `float32` or `float64` storage.
-The buffer view byte length MUST equal the product of the dimensions times four
-or eight bytes respectively. All stored values MUST be finite. Tagged nonfinite
-numbers and exact integers remain inline. A producer MUST use `float64` whenever
-`float32` would change a value.
-
-Consumers MUST restore the arrays before exposing semantic metadata. Buffer-view
-bounds, shape products, placeholders and paths require semantic validation in
-addition to JSON Schema validation. A version 1 payload MUST NOT contain
-`metadataBuffers`. Producers SHOULD keep small arrays inline and use version 1
-when no buffered arrays are needed. Consumers that only support version 1 MUST
-reject version 2 when complete SimReady semantics are required.
+Consumers MAY read legacy version 1 and 2 files. Those versions used `usdMetadata`
+and optional numeric buffer views, whose input representation is described by the
+legacy schemas. Runtime producers MUST emit version 3 rather than copying that
+source property representation into new assets.
 
 ## Related extensions
 
@@ -345,11 +295,11 @@ Tools which rewrite an asset containing this extension MUST preserve:
 - The frame and placement of `stageNode`.
 - The identity and independent motion of bound nodes.
 - Collision geometry, including meshes outside the rendered scene.
-- Typed metadata, source identities and relationships.
+- Defined semantic labels and runtime identities.
 
 A node reorder MUST update `stageNode` and `bindings[].node`. A mesh reorder
 MUST update `snapshot.shapes[].mesh`. A buffer-view reorder MUST update
-`metadataBuffers[].bufferView`. These views are live data even when no mesh
+legacy `metadataBuffers[].bufferView` inputs. Those legacy views are live input data even when no mesh
 accessor refers to them. Companion-extension indices must also be
 updated according to their own specifications. Strings containing USD paths or
 source instancer indices MUST NOT be treated as glTF table indices.
@@ -396,12 +346,12 @@ glTF application. Run `npm run examples:build` to regenerate them.
 
 | Source capability                                            | Representation                                                                                                            |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Units and core metadata                                      | Physics normalized to glTF units and authored metadata in `usdMetadata.stage`.                                                                                 |
+| Units and core metadata                                      | Physics normalized to glTF units and source stage metadata retained externally.                                                                                 |
 | Bodies, collision shapes, mass, materials, joints and drives | Typed snapshot records and optional Khronos physics projection.                                                           |
-| Semantic labels and taxonomy identifiers                     | Applied schemas and typed attributes in `usdMetadata.prims`.                                                              |
-| Non-visual material attributes                               | Namespaced material properties and relationships in `usdMetadata.prims`.                                                  |
-| Grasp, gripper, sensor and domain-specific properties        | Typed attributes, relationships and any separately represented geometry; a domain implementation supplies their behavior. |
-| Runtime variants and profiles                                | Authored metadata and the selected composed configuration.                                                                |
+| Semantic labels and taxonomy identifiers                     | Defined `semantics` records targeting exported binding identities.                                                              |
+| Non-visual material attributes                               | Mapped physical values use physics materials; unimplemented source properties remain external.                                                  |
+| Grasp, gripper, sensor and domain-specific properties        | An explicit domain runtime contract and conversion are required; source authoring properties remain external. |
+| Runtime variants and profiles                                | The selected composed configuration is exported; source variant authoring remains external.                                                                |
 
 Current adapter limitations and export-profile gaps are listed in the
 [implementation notes](implementation.md#current-gaps), rather than changing

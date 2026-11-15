@@ -23,7 +23,8 @@ export type World = import("./rapier-types.js").World;
 export type ObjectBinding = import("./three.js").ObjectBinding;
 export type SimreadyRuntime = {
     readonly snapshot: import("./index.js").GltfPhysicsSnapshot;
-    readonly usdMetadata: SimreadyMetadata;
+    readonly usdMetadata?: SimreadyMetadata;
+    readonly semantics: import("./index.js").SimreadySemanticLabels[];
     readonly root: Object3D;
     readonly bindings: ObjectBinding[];
     readonly mappingIssues: PhysicsIssue[];

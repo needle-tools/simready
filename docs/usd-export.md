@@ -129,7 +129,7 @@ mechanism.setJointValue('/Assembly/Hinge', 45); // runtime API: degrees; sliders
 // mechanism.dispose();
 // const simulation = await runtime.createSimulation({rapier: initializedRapier});
 // simulation.play(); simulation.update(deltaSeconds); simulation.dispose();
-// const schemaData = runtime.usdMetadata;
+// const schemaData = runtime.semantics;
 ```
 
 The wire snapshot uses radians. The loader converts angular values for the

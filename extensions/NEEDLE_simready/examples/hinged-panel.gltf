@@ -491,12 +491,9 @@
   ],
   "extensions": {
     "NEEDLE_simready": {
-      "version": 1,
+      "version": 3,
       "stageNode": 0,
       "snapshot": {
-        "scenes": [],
-        "materials": [],
-        "groups": [],
         "bodies": [
           {
             "path": "/Cabinet/Base",
@@ -532,13 +529,8 @@
         "shapes": [
           {
             "path": "/Cabinet/Base/Collider",
-            "body": "/Cabinet/Base",
             "type": "cube",
-            "halfExtents": [
-              0.6,
-              0.4,
-              0.02
-            ],
+            "body": "/Cabinet/Base",
             "position": [
               0.5,
               0,
@@ -549,17 +541,17 @@
               0,
               0,
               1
+            ],
+            "halfExtents": [
+              0.6,
+              0.4,
+              0.02
             ]
           },
           {
             "path": "/Cabinet/Door/Collider",
-            "body": "/Cabinet/Door",
             "type": "cube",
-            "halfExtents": [
-              0.5,
-              0.02,
-              0.45
-            ],
+            "body": "/Cabinet/Door",
             "position": [
               0.5,
               0,
@@ -570,6 +562,11 @@
               0,
               0,
               1
+            ],
+            "halfExtents": [
+              0.5,
+              0.02,
+              0.45
             ]
           }
         ],
@@ -579,7 +576,6 @@
             "type": "revolute",
             "body0": "/Cabinet/Base",
             "body1": "/Cabinet/Door",
-            "axis": "Z",
             "position0": [
               0,
               0,
@@ -602,6 +598,7 @@
               0,
               1
             ],
+            "axis": "Z",
             "limit": {
               "enabled": true,
               "lower": 0,
@@ -609,32 +606,10 @@
             }
           }
         ],
+        "materials": [],
+        "groups": [],
+        "scenes": [],
         "unsupported": []
-      },
-      "usdMetadata": {
-        "version": 1,
-        "time": 0,
-        "stage": {},
-        "prims": [
-          {
-            "path": "/Cabinet",
-            "type": "Xform",
-            "metadata": {
-              "apiSchemas": [
-                "SemanticsLabelsAPI:class"
-              ]
-            },
-            "attributes": [
-              {
-                "name": "semantics:labels:class",
-                "type": "token[]",
-                "value": [
-                  "cabinet"
-                ]
-              }
-            ]
-          }
-        ]
       },
       "bindings": [
         {
@@ -659,6 +634,43 @@
           "node": 7,
           "path": "/Cabinet/Door/Handle",
           "body": "/Cabinet/Door"
+        }
+      ],
+      "semantics": [
+        {
+          "path": "/Cabinet/Base",
+          "taxonomy": "class",
+          "labels": [
+            "cabinet"
+          ]
+        },
+        {
+          "path": "/Cabinet/Door",
+          "taxonomy": "class",
+          "labels": [
+            "cabinet"
+          ]
+        },
+        {
+          "path": "/Cabinet/Base/Visual",
+          "taxonomy": "class",
+          "labels": [
+            "cabinet"
+          ]
+        },
+        {
+          "path": "/Cabinet/Door/Visual",
+          "taxonomy": "class",
+          "labels": [
+            "cabinet"
+          ]
+        },
+        {
+          "path": "/Cabinet/Door/Handle",
+          "taxonomy": "class",
+          "labels": [
+            "cabinet"
+          ]
         }
       ],
       "mappingIssues": []
