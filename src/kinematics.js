@@ -13,12 +13,12 @@ isDynamic():boolean}} BodyPose */
 /** @typedef {import('./rapier.js').VisualBinding} VisualBinding */
 /** @typedef {{data:PhysicsBody,body:BodyPose,link:Link,position:Vector3,rotation:Quaternion}} BodyRecord */
 /** @typedef {{data:PhysicsJoint,joint:Joint,sign:number,angular:boolean,dof:number|null,
- * parent:string,child:string,closure:boolean,lower:number,upper:number,initial:number}} JointRecord */
+ * parent:string,child:string,closure:boolean,lower:number,upper:number,initial:number,rotationDofs:number[],initialRotation:Quaternion|null}} JointRecord */
 /** @typedef {Awaited<ReturnType<typeof createMechanism>>} Mechanism */
-/** @typedef {{snapshot:PhysicsSnapshot,loadKinematics?:()=>Promise<unknown>,
+/** @typedef {{snapshot:PhysicsSnapshot,loadKinematics?:()=>Promise<unknown>,framePolicy?:'strict'|'preserve-rest',
  * bindVisuals?:(bodies:MechanismBodies,warn:(item:{path:string,type?:string},reason:string)=>void)=>VisualBinding|Promise<VisualBinding>}} MechanismOptions */
 
-import {Matrix4,Quaternion,Vector3} from 'three';
+import {Euler,Matrix4,Quaternion,Vector3} from 'three';
 import {loadKinematicsModule} from './kinematics-types.js';
 import {validateSnapshot} from './index.js';
 const emptyVisualBinding={sync(){},reset(){},bodyForObject(){return null;}};
@@ -40,13 +40,16 @@ const rigid=link=>new Matrix4().fromArray(link.matrixWorld);
 
 /** Bounded USD joint manipulation. The optional IK core has no physics/WASM runtime. */
 /** @param {MechanismOptions} options */
-export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
+export async function createMechanism({snapshot,bindVisuals,loadKinematics,framePolicy='preserve-rest'}){
+ if(!['strict','preserve-rest'].includes(framePolicy))throw new TypeError('Invalid joint frame policy.');
  snapshot=Object.assign({bodies:[],shapes:[],joints:[],materials:[],groups:[],scenes:[]},snapshot);
  validateSnapshot(snapshot);
  snapshot={...snapshot,joints:[...(snapshot.joints||[])]};
  const {Link,Joint,Solver,DOF}=await loadKinematicsModule(loadKinematics);
  /** @type {PhysicsIssue[]} */
  const unsupported=[];
+ /** @type {import('./description.js').Adaptation[]} */
+ const adaptations=[];
  /** @type {Map<string,BodyRecord>} */
  const bodies=new Map();
  /** @type {Map<string,JointRecord>} */
@@ -62,7 +65,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
  function body(path){const record=bodies.get(path);if(!record)throw new Error('Unavailable mechanism body: '+path);return record;}
  /** @param {{path:string,type?:string}} data @param {string} reason */
  const warn=(data,reason)=>unsupported.push({path:data.path,type:data.type,reason});
- /** @type {{record:JointRecord,point:Vector3,pivot:Vector3,axis:Vector3,initial:number,angle:number}|null} */
+ /** @type {{record:JointRecord,point:Vector3,pivot:Vector3,axis:Vector3,initial:number,angle:number,rotation:Quaternion|null,frameRotation:Quaternion}|null} */
  let drag=null;
  /** @type {VisualBinding|undefined} */
  let visuals;
@@ -79,15 +82,17 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
   edges.set('',[]);
   const descriptors=(snapshot.joints||[]).filter(j=>j.jointEnabled!==false);
   for(const data of descriptors){
-   if(!['fixed','revolute','prismatic'].includes(data.type)){warn(data,'Joint type is not supported for manipulation.');continue;}
+   if(!['fixed','revolute','prismatic','spherical'].includes(data.type)){warn(data,'Joint type is not supported for manipulation.');continue;}
    if(!edges.has(data.body0||'')||!edges.has(data.body1||'')){warn(data,'Joint references a body outside this mechanism.');continue;}
    edges.get(data.body0||'')?.push(data);edges.get(data.body1||'')?.push(data);
   }
   /** @param {PhysicsJoint} data @param {string} parent @param {string} child */
   function attach(data,parent,child,reversed=false,closure=false){
-   const joint=new Joint(),sign=reversed?-1:1,angular=data.type==='revolute',dof=data.type==='fixed'?null:(angular?{X:DOF.EX,Y:DOF.EY,Z:DOF.EZ}:{X:DOF.X,Y:DOF.Y,Z:DOF.Z})[data.axis||'X'];
-   joint.name=data.path;setFrame(joint,frame(data,reversed?1:0));if(dof!==null)joint.setDoF(dof);
-   const record={data,joint,sign,angular,dof,parent,child,closure,lower:-Infinity,upper:Infinity,initial:0};
+   const joint=new Joint(),sign=reversed?-1:1,angular=data.type==='revolute'||data.type==='spherical',dof=['fixed','spherical'].includes(data.type)?null:(angular?{X:DOF.EX,Y:DOF.EY,Z:DOF.EZ}:{X:DOF.X,Y:DOF.Y,Z:DOF.Z})[data.axis||'X'];
+   const rotationDofs=data.type==='spherical'?[DOF.EX,DOF.EY,DOF.EZ]:[];
+   joint.name=data.path;setFrame(joint,frame(data,reversed?1:0));if(rotationDofs.length)joint.setDoF(...rotationDofs);else if(dof!==null)joint.setDoF(dof);
+   /** @type {JointRecord} */
+   const record={data,joint,sign,angular,dof,parent,child,closure,lower:-Infinity,upper:Infinity,initial:0,rotationDofs,initialRotation:null};
    const a=(parent?pose(body(parent).data.position,body(parent).data.rotation):identity).clone().multiply(frame(data,reversed?1:0));
    const b=(child?pose(body(child).data.position,body(child).data.rotation):identity).clone().multiply(frame(data,reversed?0:1));
    const relative=a.clone().invert().multiply(b),p=new Vector3(),q=new Quaternion();relative.decompose(p,q,new Vector3());
@@ -100,19 +105,32 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
     }
     joint.setDoFValue(dof,value);}
    record.initial=value*sign*(angular?180/Math.PI:1);
-   if(data.limit?.enabled){record.lower=typeof data.limit.lower==='number'&&Number.isFinite(data.limit.lower)?data.limit.lower:-Infinity;record.upper=typeof data.limit.upper==='number'&&Number.isFinite(data.limit.upper)?data.limit.upper:Infinity;}
+   if(!rotationDofs.length&&data.limit?.enabled){record.lower=typeof data.limit.lower==='number'&&Number.isFinite(data.limit.lower)?data.limit.lower:-Infinity;record.upper=typeof data.limit.upper==='number'&&Number.isFinite(data.limit.upper)?data.limit.upper:Infinity;}
+   if(framePolicy==='preserve-rest'&&dof!==null){
+    record.initial=Math.max(record.lower,Math.min(record.upper,record.initial));
+    value=record.initial*sign*(angular?Math.PI/180:1);joint.setDoFValue(dof,value);
+   }
+   if(rotationDofs.length){
+    record.initialRotation=framePolicy==='preserve-rest'?limitRotation(data,q):q.clone();setRawRotation(record,record.initialRotation);
+    const angles=data.limit?.enabled?[data.limit.lower,data.limit.upper].filter(v=>v!==null&&v>=0):[];
+    if(angles.length&&(angles.length<2||angles[0]!==angles[1]))adaptations.push({path:data.path,source:'elliptical cone limit',target:'circular cone limit',reason:'Interaction conservatively uses the smaller authored swing angle; twist remains free.'});
+   }
+   const motion=record.initialRotation?new Matrix4().makeRotationFromQuaternion(record.initialRotation):angular?new Matrix4().makeRotationAxis(axis(data.axis),value):new Matrix4().makeTranslation(...axis(data.axis).multiplyScalar(value).toArray());
+   const residual=motion.clone().invert().multiply(relative),delta=new Vector3(),turn=new Quaternion();residual.decompose(delta,turn,new Vector3());
+   const adjusted=delta.length()>tolerance*10||turn.angleTo(new Quaternion())>1e-3;
+   if((framePolicy==='preserve-rest'||dof===null&&!closure)&&adjusted)
+    adaptations.push({path:data.path,source:'authored joint attachment frames',target:'authored rest pose',reason:'Manipulation preserves the authored body pose using a rest-frame offset. Simulation and export retain the original constraint frames.'});
    // Body-frame relations own the articulation; USD prim ancestry does not.
    const parentLink=parent?body(parent).link:world;parentLink.addChild(joint);
    if(closure){
-    const target=new Link(),fixed=new Joint();setFrame(fixed,frame(data,1));(child?body(child).link:world).addChild(fixed);fixed.addChild(target);joint.makeClosure(target);closures.push(record);
+    const target=new Link(),fixed=new Joint();
+    const targetFrame=framePolicy==='preserve-rest'&&adjusted?(child?pose(body(child).data.position,body(child).data.rotation):identity).clone().invert().multiply(a).multiply(motion):frame(data,1);
+    setFrame(fixed,targetFrame);(child?body(child).link:world).addChild(fixed);fixed.addChild(target);joint.makeClosure(target);closures.push(record);
    }else{
     const link=body(child).link,offset=frame(data,reversed?0:1).invert();
-    if(dof===null){
-     // A fixed attachment has no editable coordinate. Preserve its authored
-     // rest pose during manipulation, and report inconsistent constraint frames
-     // without disabling independent, valid movable joints.
-     if(p.length()>tolerance*10||q.angleTo(new Quaternion())>1e-3)warn(data,'Fixed joint frames disagree with the authored body pose; manipulation preserves its rest offset.');
-     offset.premultiply(relative);
+    if(dof===null || framePolicy==='preserve-rest'){
+     // Correct the visual binding, without changing source constraint frames.
+     offset.premultiply(residual);
     }
     setFrame(link,offset);joint.addChild(link);parents.set(child,record);
    }
@@ -180,7 +198,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
   /** @param {string} path @returns {JointRecord|null} */
   function jointForBody(path){
    let record=parents.get(path),seen=new Set();
-   while(record&&!seen.has(record)){seen.add(record);if(record.dof!==null&&record.lower<record.upper&&coupling(record)?.gain!==0)return source(record)?record:null;record=parents.get(record.parent);}
+   while(record&&!seen.has(record)){seen.add(record);if((record.rotationDofs.length||record.dof!==null&&record.lower<record.upper)&&coupling(record)?.gain!==0)return source(record)?record:null;record=parents.get(record.parent);}
    return null;
   }
   function updatePoses(){world.updateMatrixWorld(true);for(const item of bodies.values())rigid(item.link).decompose(item.position,item.rotation,new Vector3());}
@@ -190,14 +208,41 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
   const binding=await bindVisuals?.(bodies,warn)||emptyVisualBinding;visuals=binding;
   function sync(){updatePoses();binding.sync();}
   function closeEnough(){
+   for(const record of joints.values())if(record.rotationDofs.length){const q=rotationValue(record);if(limitRotation(record.data,q).angleTo(q)>1e-5)return false;}
    return closures.every(({joint})=>{const p=new Float64Array(3),r=new Float64Array(3);joint.getClosureError(p,r);return Math.hypot(...p)<tolerance*5&&Math.hypot(...r)<1e-4;});
+  }
+  /** @param {PhysicsJoint} data @param {Quaternion} value */
+  function limitRotation(data,value){
+   const result=value.clone().normalize(),angles=data.limit?.enabled?[data.limit.lower,data.limit.upper].filter(v=>v!==null&&v>=0):[];
+   if(!angles.length)return result;const maximum=Math.min(.../** @type {number[]} */(angles))*Math.PI/180,n=axis(data.axis);
+   const angle=n.angleTo(n.clone().applyQuaternion(result));if(angle<=maximum+1e-12)return result;
+   const component=new Vector3(result.x,result.y,result.z).dot(n),twist=new Quaternion(n.x*component,n.y*component,n.z*component,result.w);
+   if(twist.lengthSq()<1e-12)twist.identity();else twist.normalize();
+   const swing=result.clone().multiply(twist.clone().invert());if(swing.w<0)swing.set(-swing.x,-swing.y,-swing.z,-swing.w);
+   return new Quaternion().slerp(swing,maximum/angle).multiply(twist).normalize();
+  }
+  /** @param {JointRecord} record @param {Quaternion} q */
+  function setRawRotation(record,q){const e=new Euler().setFromQuaternion(q,'ZYX');for(const [i,dof]of record.rotationDofs.entries())record.joint.setDoFValue(dof,[e.x,e.y,e.z][i]);}
+  /** @param {JointRecord} record @param {boolean} [canonical] */
+  function rotationValue(record,canonical=true){const e=record.rotationDofs.map(dof=>record.joint.getDoFValue(dof)),q=new Quaternion().setFromEuler(new Euler(e[0],e[1],e[2],'ZYX'));return canonical&&record.sign<0?q.invert():q;}
+  function saveCoordinates(){return [...joints.values()].flatMap(record=>(record.rotationDofs.length?record.rotationDofs:record.dof===null?[]:[record.dof]).map(dof=>({record,dof,value:record.joint.getDoFValue(dof)})));}
+  /** @param {JointRecord} record @param {Quaternion} next */
+  function setRotation(record,next){
+   if(!valid||disposed)return false;const before=saveCoordinates(),bounded=limitRotation(record.data,next);if(record.sign<0)bounded.invert();setRawRotation(record,bounded);
+   if(solver){
+    const limits=record.rotationDofs.map(dof=>({dof,min:record.joint.minDoFLimit[dof],max:record.joint.maxDoFLimit[dof],target:record.joint.getDoFValue(dof)}));
+    for(const l of limits){record.joint.setMinLimit(l.dof,l.target);record.joint.setMaxLimit(l.dof,l.target);}solver.solve();mimic();
+    for(const l of limits){record.joint.setMinLimit(l.dof,l.min);record.joint.setMaxLimit(l.dof,l.max);}world.updateMatrixWorld(true);
+    if(!closeEnough()){for(const s of before)s.record.joint.setDoFValue(s.dof,s.value);sync();return false;}
+   }
+   sync();return true;
   }
   /** @param {JointRecord} record @param {number} next @returns {boolean} */
   function setValue(record,next){
-   if(!valid||!Number.isFinite(next))return false;
+   if(!valid||disposed||!Number.isFinite(next))return false;
    const dep=record.data.mimic;if(dep){const ref=joints.get(dep.joint);return ref&&dep.multiplier!==0?setValue(ref,(next-dep.offset)/dep.multiplier):false;}
    if(record.dof===null)return false;
-   const before=[...joints.values()].flatMap(r=>r.dof===null?[]:[{record:r,dof:r.dof,value:r.joint.getDoFValue(r.dof)}]);
+   const before=saveCoordinates();
    record.joint.setDoFValue(record.dof,record.sign*Math.max(record.lower,Math.min(record.upper,next))*(record.angular?Math.PI/180:1));mimic();
    if(solver){
     const target=record.joint.getDoFValue(record.dof),min=record.joint.minDoFLimit[record.dof],max=record.joint.maxDoFLimit[record.dof];
@@ -208,7 +253,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
    sync();return true;
   }
   return {
-   mode:/** @type {const} */('interaction'),bodies,joints,unsupported,roots,metersPerUnit:scale,
+   mode:/** @type {const} */('interaction'),bodies,joints,unsupported,adaptations,roots,metersPerUnit:scale,
    play(){if(!disposed)playing=true;},pause(){playing=false;drag=null;},isPlaying:()=>playing,
    /** @param {number} [_dt] */
    update(_dt){},
@@ -216,6 +261,10 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
    getJointValue(path){const record=joints.get(path);return record?.dof!==null&&record?value(record):null;},
    /** @param {string} path @param {number} next */
    setJointValue(path,next){const record=joints.get(path);return !!record&&setValue(record,next);},
+   /** @param {string} path */
+   getJointRotation(path){const record=joints.get(path);return record?.rotationDofs.length?rotationValue(record).toArray():null;},
+   /** @param {string} path @param {import('./index.js').PhysicsRotation} next */
+   setJointRotation(path,next){const record=joints.get(path);if(!record?.rotationDofs.length||next.length!==4||!next.every(Number.isFinite)||new Quaternion(...next).lengthSq()<1e-12)return false;return setRotation(record,new Quaternion(...next));},
    jointForBody,
    /** @param {import('three').Object3D} object @param {number} [index] */
    bodyForObject(object,index){return valid?binding.bodyForObject(object,index):null;},
@@ -224,18 +273,22 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics}){
     const record=jointForBody(path);if(!playing||!valid||!record)return false;
     updatePoses();const parent=record.parent?rigid(body(record.parent).link):identity;
     const origin=parent.clone().multiply(frame(record.data,record.sign<0?1:0)),p=new Vector3(),q=new Quaternion();origin.decompose(p,q,new Vector3());
-    drag={record,point:new Vector3().copy(position),pivot:p,axis:axis(record.data.axis).applyQuaternion(q),initial:value(record),angle:0};return true;
+    drag={record,point:new Vector3().copy(position),pivot:p,axis:axis(record.data.axis).applyQuaternion(q),initial:value(record),angle:0,rotation:record.rotationDofs.length?rotationValue(record,false):null,frameRotation:q};return true;
    },
    /** @param {import('three').Vector3Like} position */
    moveDrag(position){
     if(!drag)return;const{record,axis,pivot,point,initial}=drag;let delta;
+    if(drag.rotation){const a=point.clone().sub(pivot),b=new Vector3().copy(position).sub(pivot);if(a.lengthSq()<1e-12||b.lengthSq()<1e-12)return;
+     const q=new Quaternion().setFromUnitVectors(a.normalize(),b.normalize()),f=drag.frameRotation;
+     q.premultiply(f.clone().invert()).multiply(f).multiply(drag.rotation);if(record.sign<0)q.invert();setRotation(record,q);return;
+    }
     if(record.angular){const a=point.clone().sub(pivot).projectOnPlane(axis),b=new Vector3().copy(position).sub(pivot).projectOnPlane(axis);if(a.lengthSq()<1e-12||b.lengthSq()<1e-12)return;
      let angle=Math.atan2(axis.dot(a.clone().cross(b)),a.dot(b));angle+=Math.round((drag.angle-angle)/(2*Math.PI))*2*Math.PI;drag.angle=angle;delta=angle*180/Math.PI;
     }else delta=new Vector3().copy(position).sub(point).dot(axis);
     setValue(record,initial+delta*record.sign);
    },
    endDrag(){drag=null;},
-   reset(){drag=null;playing=false;for(const record of joints.values())if(record.dof!==null)record.joint.setDoFValue(record.dof,record.initial*record.sign*(record.angular?Math.PI/180:1));updatePoses();binding.reset();},
+   reset(){drag=null;playing=false;for(const record of joints.values())if(record.initialRotation)setRawRotation(record,record.initialRotation);else if(record.dof!==null)record.joint.setDoFValue(record.dof,record.initial*record.sign*(record.angular?Math.PI/180:1));updatePoses();binding.reset();},
    dispose(){if(disposed)return;this.reset();disposed=true;},
   };
  }catch(error){visuals?.reset();throw error;}

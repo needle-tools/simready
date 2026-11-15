@@ -27,7 +27,7 @@ export type Link = Frame & {
 export type Joint = Frame & {
     addChild(child: Link): void;
     makeClosure(child: Link): void;
-    setDoF(dof: number): void;
+    setDoF(...dofs: number[]): void;
     setDoFValue(dof: number, value: number): boolean;
     getDoFValue(dof: number): number;
     setMinLimit(dof: number, value: number): void;

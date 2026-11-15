@@ -8,7 +8,7 @@
  * updateMatrixWorld(force?:boolean):void}} Frame
  * @typedef {Frame & {addChild(child:Joint):void}} Link
  * @typedef {Frame & {addChild(child:Link):void,makeClosure(child:Link):void,
- * setDoF(dof:number):void,setDoFValue(dof:number,value:number):boolean,
+ * setDoF(...dofs:number[]):void,setDoFValue(dof:number,value:number):boolean,
  * getDoFValue(dof:number):number,setMinLimit(dof:number,value:number):void,
  * setMaxLimit(dof:number,value:number):void,minDoFLimit:Float32Array,maxDoFLimit:Float32Array,
  * getClosureError(position:Float64Array,rotation:Float64Array):void}} Joint

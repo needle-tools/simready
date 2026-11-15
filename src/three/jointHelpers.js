@@ -39,7 +39,13 @@ export function createJointHelpers(mechanism,{visible=()=>true,selected=()=>fals
    const edge=(a,b)=>lines.push(...a,...b);
    /** @param {Vector3} p */
    const tick=p=>{edge(p.clone().addScaledVector(u,-radius*.13),p.clone().addScaledVector(u,radius*.13));edge(p.clone().addScaledVector(v,-radius*.13),p.clone().addScaledVector(v,radius*.13));};
-   if(record.dof===null){
+   if(record.data.type==='spherical'){
+    dots.push(0,0,0);
+    for(const [a,b]of[[axis,u],[u,v],[v,axis]])for(let i=0;i<48;i++){
+     const at=/** @param {number} t */t=>a.clone().multiplyScalar(Math.cos(t)*radius).addScaledVector(b,Math.sin(t)*radius);
+     edge(at(i*Math.PI/24),at((i+1)*Math.PI/24));
+    }
+   }else if(record.dof===null){
     dots.push(0,0,0);
     for(const direction of[axis,u,v])edge(direction.clone().multiplyScalar(-radius*.2),direction.clone().multiplyScalar(radius*.2));
    }else if(record.angular){

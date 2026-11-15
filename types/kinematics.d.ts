@@ -1,10 +1,11 @@
 /** Bounded USD joint manipulation. The optional IK core has no physics/WASM runtime. */
 /** @param {MechanismOptions} options */
-export function createMechanism({ snapshot, bindVisuals, loadKinematics }: MechanismOptions): Promise<{
+export function createMechanism({ snapshot, bindVisuals, loadKinematics, framePolicy }: MechanismOptions): Promise<{
     mode: "interaction";
     bodies: Map<string, BodyRecord>;
     joints: Map<string, JointRecord>;
     unsupported: import("./index.js").PhysicsIssue[];
+    adaptations: import("./description.js").Adaptation[];
     roots: string[];
     metersPerUnit: number;
     play(): void;
@@ -16,6 +17,10 @@ export function createMechanism({ snapshot, bindVisuals, loadKinematics }: Mecha
     getJointValue(path: string): number | null;
     /** @param {string} path @param {number} next */
     setJointValue(path: string, next: number): boolean;
+    /** @param {string} path */
+    getJointRotation(path: string): import("three").QuaternionTuple | null;
+    /** @param {string} path @param {import('./index.js').PhysicsRotation} next */
+    setJointRotation(path: string, next: import("./index.js").PhysicsRotation): boolean;
     jointForBody: (path: string) => JointRecord | null;
     /** @param {import('three').Object3D} object @param {number} [index] */
     bodyForObject(object: import("three").Object3D, index?: number): unknown;
@@ -71,11 +76,14 @@ export type JointRecord = {
     lower: number;
     upper: number;
     initial: number;
+    rotationDofs: number[];
+    initialRotation: Quaternion | null;
 };
 export type Mechanism = Awaited<ReturnType<typeof createMechanism>>;
 export type MechanismOptions = {
     snapshot: PhysicsSnapshot;
     loadKinematics?: () => Promise<unknown>;
+    framePolicy?: "strict" | "preserve-rest";
     bindVisuals?: (bodies: MechanismBodies, warn: (item: {
         path: string;
         type?: string;

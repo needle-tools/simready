@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Manipulate spherical joints with quaternion controls and pointer dragging, including swing limits and reversed attachments.
+- Preserve authored rest poses for inconsistent joint frames while keeping hard travel limits. Report these visual-binding adaptations separately; strict frame validation remains available.
+
 - Simulate authored convex-decomposition meshes as concave compounds, preserving cavities and contact geometry.
 - Treat PhysX maximum-float joint breaking thresholds as unbounded, including glTF unit conversion; finite thresholds still require backend breakage support.
 
