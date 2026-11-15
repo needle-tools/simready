@@ -39,6 +39,12 @@ export async function probeNeedle(){
   check(body.translation().y>1,'drag spring did not lift the body');asset.endDrag();
   asset.reset();check(asset.rigidbodies.get('/Body')===component,'reset replaced Engine identity');
   asset.dispose();check(ground.isValid(),'asset disposal removed ordinary floor');check(Engine.getComponent(object,Engine.Rigidbody)===null,'asset disposal leaked Engine identity');
-  return {contacts,queries:true,mass:2,pause:true,drag:true,reset:true,disposal:true};
+  const floating=await host.addAsset({snapshot:{...snapshot,bodies:snapshot.bodies.map(b=>({...b,gravityScale:0,continuousCollision:false}))},position:[3,0,0]});
+  const floatingBody=floating.bodies.get('/Body').body;
+  for(let i=0;i<120;i++){physics.step(1/60);physics.postStep();}
+  check(Math.abs(floatingBody.translation().y-3)<1e-5,'Engine lost authored zero gravity');
+  check(floating.rigidbodies.get('/Body').useGravity===false,'Engine component gravity diverged');
+  floating.dispose();
+  return {contacts,queries:true,mass:2,pause:true,drag:true,reset:true,disposal:true,gravity:true};
  }finally{host.dispose();physics.dispose();}
 }
