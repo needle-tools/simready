@@ -88,7 +88,7 @@ const emptyVisualBinding = {sync(){},reset(){},bodyForObject(){return null;}};
 /** @param {PhysicsSnapshot} snapshot */
 export function getSimulationLimitations(snapshot) {
     const issues=[...(snapshot.unsupported||[]),...getSnapshotIssues(snapshot)];
-    for(const shape of snapshot.shapes||[])if(shape.collisionEnabled!==false && shape.type==='mesh' && shape.approximation && !['none','convexHull','sdf'].includes(shape.approximation))
+    for(const shape of snapshot.shapes||[])if(shape.collisionEnabled!==false && shape.type==='mesh' && shape.approximation && !['none','convexHull','convexDecomposition','sdf'].includes(shape.approximation))
         issues.push({path:shape.path,type:'mesh',reason:`Mesh approximation ${shape.approximation} is not supported.`});
     return issues;
 }

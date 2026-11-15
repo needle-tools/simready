@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Simulate authored convex-decomposition meshes as concave compounds, preserving cavities and contact geometry.
+- Treat PhysX maximum-float joint breaking thresholds as unbounded, including glTF unit conversion; finite thresholds still require backend breakage support.
+
 - Preserve mechanical clearances in large SDF-source collision meshes without increasing the cooking grid for small parts.
 - Keep valid hinges and sliders usable when a fixed attachment has inconsistent frames; manipulation preserves the attachment's authored rest offset and reports the mismatch.
 - Improve contacts between thin SDF-source collision meshes without changing their geometry or mass.

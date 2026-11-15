@@ -39,6 +39,7 @@
 import {Quaternion, Vector3} from 'three';
 import {shiftInertiaToCenterOfMass} from './massProperties.js';
 import {isNumberBuffer} from './validation.js';
+import {isBoundedThreshold} from './limits.js';
 
 /** @param {import('./index.js').PhysicsVector} [a] @returns {Vector} */
 const vector = (a = [0, 0, 0]) => ({x: a[0], y: a[1], z: a[2]});
@@ -139,8 +140,8 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                 const indices = Uint32Array.from(data.indices || []);
                 if (!points.length) { warn(data, 'Mesh collision points are unavailable.'); continue; }
                 if (data.approximation === 'convexHull') shape = {type: 'convexHull', points};
-                else if (data.approximation === 'sdf') {
-                    if (!capabilities.shapes.has('convexDecomposition')) { warn(data, `SDF-source mesh collision requires ${capabilities.backend === 'rapier' ? 'Rapier ' : ''}convex decomposition support.`); continue; }
+                else if (data.approximation === 'sdf' || data.approximation === 'convexDecomposition') {
+                    if (!capabilities.shapes.has('convexDecomposition')) { warn(data, `${data.approximation === 'sdf' ? 'SDF-source' : 'Convex-decomposed'} mesh collision requires ${capabilities.backend === 'rapier' ? 'Rapier ' : ''}convex decomposition support.`); continue; }
                     // Aim for 5 mm cells within the cooking budget. A coarse
                     // grid on a large chassis can close wheel/joint clearances;
                     // small parts do not need the larger grid.
@@ -153,7 +154,7 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                     const extent = Math.max(...max.map((value, axis) => value - min[axis])) * mpu;
                     const resolution = Math.max(64, Math.min(128, 2 ** Math.ceil(Math.log2(extent / .005))));
                     shape = {type: 'convexDecomposition', points, indices, resolution, concavity: .001, maxHulls: 128};
-                    adaptations.push({path: data.path, source: 'sdf', target: 'convex decomposition',
+                    adaptations.push({path: data.path, source: data.approximation, target: 'convex decomposition',
                         reason: 'The authored collision surface is represented by a concave compound of convex parts.'});
                 }
                 // Preserve authored concave surfaces. A single convex hull would seal drawers and cavities.
@@ -244,11 +245,11 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
             joint.type = 'distance'; joint.maxDistance = distance;
         } else { warn(data, 'Joint type or limits are not supported.'); continue; }
         if (!capabilities.joints.has(joint.type)) { warn(data, 'Joint type or limits are not supported.'); continue; }
-        if (Number.isFinite(data.breakForce) || Number.isFinite(data.breakTorque)) {
+        if (isBoundedThreshold(data.breakForce) || isBoundedThreshold(data.breakTorque)) {
             if (!capabilities.features.has('jointBreaking')) warn(data, 'Joint breaking thresholds are not supported.');
             else {
-                if (Number.isFinite(data.breakForce)) joint.breakForce = /** @type {number} */ (data.breakForce);
-                if (Number.isFinite(data.breakTorque)) joint.breakTorque = /** @type {number} */ (data.breakTorque);
+                if (isBoundedThreshold(data.breakForce)) joint.breakForce = data.breakForce;
+                if (isBoundedThreshold(data.breakTorque)) joint.breakTorque = data.breakTorque;
             }
         }
         const articulation = articulationOf.get(data.path);

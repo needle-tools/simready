@@ -1,4 +1,5 @@
 import {Quaternion, Vector3} from 'three';
+import {isBoundedThreshold} from './limits.js';
 
 /** Convert an independent asset into a host world's coordinates and units. */
 /** @param {import('./index.js').PhysicsSnapshot} source
@@ -62,8 +63,8 @@ export function transformSnapshot(source, {metersPerUnit = 1, kilogramsPerUnit =
             if (!d.acceleration) { d.stiffness *= force / (angular ? 1 : length); d.damping *= force / (angular ? 1 : length); }
             if (d.forceLimit != null && Number.isFinite(d.forceLimit)) d.forceLimit *= force;
         }
-        if (joint.breakForce != null && Number.isFinite(joint.breakForce)) joint.breakForce *= mass * length;
-        if (joint.breakTorque != null && Number.isFinite(joint.breakTorque)) joint.breakTorque *= mass * length ** 2;
+        if (joint.breakForce != null) joint.breakForce = isBoundedThreshold(joint.breakForce) ? joint.breakForce * mass * length : null;
+        if (joint.breakTorque != null) joint.breakTorque = isBoundedThreshold(joint.breakTorque) ? joint.breakTorque * mass * length ** 2 : null;
     }
     for (const material of snapshot.materials) properties(material);
     for (const scene of snapshot.scenes) {

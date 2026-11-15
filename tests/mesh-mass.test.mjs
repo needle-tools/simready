@@ -13,11 +13,11 @@ function concaveMesh(){
  }
  return {points,indices};
 }
-test('SDF-source dynamic concave meshes preserve cavities and collide with independently imported objects',async()=>{
+for(const approximation of ['sdf','convexDecomposition']) test(`${approximation} dynamic concave meshes preserve cavities and collide with independently imported objects`,async()=>{
  const host=createSimulationWorld({rapier:R});
  try{
   await host.addAsset({snapshot:{...empty,shapes:[{path:'/Ground',type:'cube',halfExtents:[10,.5,10],position:[0,-.5,0],rotation:q}]}});
-  const source={...empty,bodies:[{path:'/Container',position:[0,1,0],rotation:q,mass:20}],shapes:[{path:'/Mesh',body:'/Container',type:'mesh',approximation:'sdf',...concaveMesh(),position:[0,0,0],rotation:q}]};
+  const source={...empty,bodies:[{path:'/Container',position:[0,1,0],rotation:q,mass:20}],shapes:[{path:'/Mesh',body:'/Container',type:'mesh',approximation,...concaveMesh(),position:[0,0,0],rotation:q}]};
   const before=structuredClone(source),container=await host.addAsset({snapshot:source});
   const object=await host.addAsset({snapshot:{...empty,bodies:[{path:'/Ball',position:[0,5,0],rotation:q,mass:.2}],shapes:[{path:'/BallShape',body:'/Ball',type:'sphere',radius:.2,position:[0,0,0],rotation:q}]}});
   for(let i=0;i<480;i++)host.step();
