@@ -15,7 +15,7 @@
  * |{type:'convexDecomposition',points:Float32Array,indices:Uint32Array,maxHulls?:number,resolution?:number,concavity?:number}} ShapeDescription
  */
 /** @typedef {{id:string,type:'dynamic'|'kinematic'|'fixed',position:Vector,rotation:Rotation,linearVelocity:Vector,angularVelocity:Vector,
- * sleeping:boolean,continuousCollision:boolean,mass?:MassDescription,linearDamping?:number,angularDamping?:number}} BodyDescription */
+ * sleeping:boolean,continuousCollision:boolean,mass?:MassDescription,linearDamping?:number,angularDamping?:number,gravityScale?:number}} BodyDescription */
 /** @typedef {{id:string,body?:string,shape:ShapeDescription,position:Vector,rotation:Rotation,friction:number,restitution:number,density:number,mass?:MassDescription,contactSkin?:number}} ColliderDescription */
 /** @typedef {{model:'force'|'acceleration',stiffness:number,damping:number,maxForce?:number,targetPosition:number,targetVelocity:number}} DriveDescription */
 /** @typedef {{id:string,type:'fixed'|'revolute'|'prismatic'|'spherical'|'distance'|'spring',body0?:string,body1?:string,
@@ -106,7 +106,8 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
             angularVelocity: plain(new Vector3().fromArray(data.angularVelocity || [0, 0, 0]).multiplyScalar(Math.PI / 180)),
             ...(data.linearDamping !== undefined ? {linearDamping: data.linearDamping} : {}),
             ...(data.angularDamping !== undefined ? {angularDamping: data.angularDamping} : {}),
-            sleeping: !!data.startsAsleep, continuousCollision: type === 'dynamic',
+            ...(data.gravityScale !== undefined ? {gravityScale:data.gravityScale} : {}),
+            sleeping: !!data.startsAsleep, continuousCollision: type === 'dynamic' && (data.continuousCollision ?? true),
             mass: bodyMass(data, mode, kgpu)});
         bodyData.set(data.path, data);
     }

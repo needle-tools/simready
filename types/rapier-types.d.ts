@@ -76,6 +76,7 @@ export type RigidBodyDescriptor = {
     setAngularDamping(value: number): RigidBodyDescriptor;
     setSleeping(value: boolean): RigidBodyDescriptor;
     setCcdEnabled(value: boolean): RigidBodyDescriptor;
+    setGravityScale?(value: number): RigidBodyDescriptor;
 };
 export type ColliderDescriptor = {
     setTranslation(x: number, y: number, z: number): ColliderDescriptor;

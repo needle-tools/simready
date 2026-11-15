@@ -35,6 +35,15 @@ export async function probe(){
  const rotor={...snapshot,joints:[{path:'/Input',type:'revolute',body0:'',body1:'/Body',axis:'Z',position0:[0,3,0],position1:[0,0,0],rotation0:q,rotation1:q,limit:{enabled:true,lower:-7200,upper:7200}}]};
  const pose=await createMechanism({snapshot:rotor});
  try{check(Math.abs(pose.getJointValue('/Input'))<1e-6,'wide limits changed the resting turn');pose.setJointValue('/Input',1080);check(Math.abs(pose.getJointValue('/Input')-1080)<1e-3,'multi-turn pose lost rotations');}finally{pose.dispose();}
+ const sphere=await createMechanism({snapshot:{...snapshot,joints:[{path:'/Ball',type:'spherical',body0:'',body1:'/Body',position0:[0,3,0],position1:[0,0,0],rotation0:q,rotation1:q}]}});
+ try{check(sphere.unsupported.length===0,'spherical mechanism rejected');check(sphere.setJointRotation('/Ball',[0,0,Math.sin(.2),Math.cos(.2)]),'spherical rotation rejected');check(Math.abs(sphere.getJointRotation('/Ball')[2]-Math.sin(.2))<1e-5,'spherical rotation changed');}finally{sphere.dispose();}
+ const gravityWorld=createSimulationWorld({rapier:R});
+ try{
+  const floating=await gravityWorld.addAsset({snapshot:{...snapshot,bodies:snapshot.bodies.map(b=>({...b,gravityScale:0,continuousCollision:false}))}});
+  for(let i=0;i<120;i++)gravityWorld.step();
+  check(Math.abs(floating.bodies.get('/Body').body.translation().y-3)<1e-5,'authored gravity was lost');
+  check(!floating.bodies.get('/Body').body.isCcdEnabled(),'authored CCD choice was lost');
+ }finally{gravityWorld.dispose();}
  const extension=createSimreadyExtension({snapshot:toGltfPhysicsSnapshot(snapshot),stageNode:0,bindings:[{node:1,path:'/Body'}]});
  const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1]},{translation:[0,3,0]}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:extension}};
  const result=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(json),'');

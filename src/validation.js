@@ -32,7 +32,8 @@ export const isIssue = value => isRecord(value) && typeof value.path === 'string
 /** @param {unknown} value */
 const body = value => isRecord(value) && identity(value) && v3(value.position) && v4(value.rotation) && mass(value)
     && optional(value, ['scale','linearVelocity','angularVelocity'], v3)
-    && optional(value, ['rigidBodyEnabled','kinematicBody','startsAsleep'], boolean)
+    && optional(value, ['rigidBodyEnabled','kinematicBody','startsAsleep','continuousCollision'], boolean)
+    && optional(value, ['gravityScale'], value => typeof value === 'number' && Number.isFinite(value))
     && optional(value, ['linearDamping','angularDamping'], value => typeof value === 'number' && Number.isFinite(value) && value >= 0)
     && optional(value, ['filteredCollisions','simulationOwners'], strings);
 /** Lazy buffers stay unopened during unsupported-feature preflight.

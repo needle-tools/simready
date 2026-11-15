@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve per-body gravity and explicit continuous-collision choices in snapshots and both physics adapters.
+
 - Manipulate spherical joints with quaternion controls and pointer dragging, including swing limits and reversed attachments.
 - Preserve authored rest poses for inconsistent joint frames while keeping hard travel limits. Report these visual-binding adaptations separately; strict frame validation remains available.
 

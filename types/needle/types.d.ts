@@ -26,6 +26,8 @@ export type Rotation = Vector & {
 export type DampedComponent = {
     drag?: number;
     angularDrag?: number;
+    gravityScale?: number;
+    useGravity?: boolean;
     updateProperties?(): unknown;
 };
 /**

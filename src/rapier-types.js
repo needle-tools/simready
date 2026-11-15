@@ -42,6 +42,7 @@
  * setLinearDamping(value:number):RigidBodyDescriptor; setAngularDamping(value:number):RigidBodyDescriptor;
  * setSleeping(value:boolean):RigidBodyDescriptor;
  * setCcdEnabled(value:boolean):RigidBodyDescriptor;
+ * setGravityScale?(value:number):RigidBodyDescriptor;
  * }} RigidBodyDescriptor
  */
 /** @typedef {{

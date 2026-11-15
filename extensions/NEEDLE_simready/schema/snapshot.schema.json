@@ -229,6 +229,15 @@
         },
         "simulationOwners": {
           "$ref": "common.schema.json#/$defs/identities"
+        },
+        "gravityScale": {
+          "type": "number",
+          "default": 1,
+          "description": "Dimensionless multiplier for gravity acting on this body."
+        },
+        "continuousCollision": {
+          "type": "boolean",
+          "description": "Explicit continuous collision detection preference; omitted uses the backend default."
         }
       },
       "required": [

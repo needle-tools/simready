@@ -174,7 +174,14 @@ export async function createNeedleWorld({context, metersPerUnit = 1, kilogramsPe
                     // damping in sync, including the snapshot's zero defaults.
                     record.body.setLinearDamping(record.data.linearDamping ?? 0);
                     record.body.setAngularDamping(record.data.angularDamping ?? 0);
+                    if(record.data.gravityScale!==undefined){
+                        const component=handle.component;
+                        if('gravityScale' in component && 'useGravity' in component && component.updateProperties){
+                            component.gravityScale=record.data.gravityScale;component.useGravity=record.data.gravityScale!==0;component.updateProperties();
+                        }else warn({path},'The Engine backend cannot configure per-body gravity.');
+                    }
                 }
+                fail();
                 /** @type {Map<string,import('@needle-tools/engine').Collider>} */
                 const colliderComponents = new Map();
                 const contactSkins = new Map(description.colliders.map(item => [item.id, item.contactSkin]));

@@ -182,3 +182,20 @@ test('an Engine without physics assets fails with an update hint',async()=>{
  const context={scene:new Object3D(),physics:{getOrCreatePhysicsEngine(){return {initialize(){},registerExternalPhysics(){}};}}};
  await assert.rejects(createNeedleWorld({context}),/does not support physics assets/);
 });
+
+test('Needle applies per-body gravity to Engine components and preserves explicit CCD choices',async()=>{
+ const h=host(),physics=h.context.physics.getOrCreatePhysicsEngine(),create=physics.createAsset;
+ physics.createAsset=description=>{
+  const asset=create(description);
+  for(const handle of asset.bodies.values())Object.assign(handle.component,{gravityScale:1,useGravity:true,updateProperties(){this.body.setGravityScale(this.useGravity?this.gravityScale:0,true);}});
+  return asset;
+ };
+ const sim=await createNeedleWorld({context:h.context});
+ try{
+  const source=snapshot();source.bodies[0].gravityScale=0;source.bodies[0].continuousCollision=false;
+  const asset=await sim.addAsset({snapshot:source});asset.play();h.step(120);
+  assert.ok(Math.abs(asset.bodies.get('/Body').body.translation().y-2)<1e-6);
+  assert.equal(h.assets[0].bodies.get('/Body').component.useGravity,false);
+  assert.equal(h.assets[0].bodies.get('/Body').component.body.isCcdEnabled(),false);
+ }finally{sim.dispose();h.free();}
+});

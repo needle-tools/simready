@@ -84,6 +84,7 @@ export type BodyDescription = {
     mass?: MassDescription;
     linearDamping?: number;
     angularDamping?: number;
+    gravityScale?: number;
 };
 export type ColliderDescription = {
     id: string;

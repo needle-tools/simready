@@ -110,6 +110,10 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             desc.setAngularDamping(item.angularDamping ?? 0);
             desc.setSleeping(item.sleeping);
             if (item.continuousCollision) desc.setCcdEnabled(true);
+            if(item.gravityScale!==undefined){
+                if(desc.setGravityScale)desc.setGravityScale(item.gravityScale);
+                else warn({path:item.id,type:'RigidBody'},'The physics backend cannot configure per-body gravity.');
+            }
             bodies.set(item.id, makeBody(desc));
         }
         /** @type {Map<string,Collider[]>} */
