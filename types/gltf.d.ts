@@ -15,7 +15,6 @@ export class NeedleSimreadyLoaderPlugin {
 }
 export type Object3D = import("three").Object3D;
 export type PhysicsSnapshot = import("./index.js").PhysicsSnapshot;
-export type SimreadyMetadata = import("./index.js").SimreadyMetadata;
 export type PhysicsIssue = import("./index.js").PhysicsIssue;
 export type Mechanism = import("./kinematics.js").Mechanism;
 export type RigidBody = import("./rapier-types.js").RigidBody;
@@ -23,7 +22,6 @@ export type World = import("./rapier-types.js").World;
 export type ObjectBinding = import("./three.js").ObjectBinding;
 export type SimreadyRuntime = {
     readonly snapshot: import("./index.js").GltfPhysicsSnapshot;
-    readonly usdMetadata?: SimreadyMetadata;
     readonly semantics: import("./index.js").SimreadySemanticLabels[];
     readonly root: Object3D;
     readonly bindings: ObjectBinding[];

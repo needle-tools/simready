@@ -107,12 +107,8 @@ test('the schema rejects malformed versions, frames, wire geometry and semantic 
  for(const mutate of cases){const data=payload();mutate(data);assert.equal(validate(data),false,mutate.toString());}
 });
 
-test('runtime schema excludes arbitrary properties while legacy decoding stays available',async()=>{
- const data=payload();data.additionalVendorField={label:'source data'};assert.equal(validate(data),false);
- const legacy=payload();legacy.version=1;delete legacy.semantics;legacy.usdMetadata={version:1,time:0,stage:{},prims:[{path:'/Cabinet',type:'Xform',attributes:[{name:'user:legacy',type:'string',value:'read compatibility'}]}]};
- const asset=clone(panel);asset.extensions.NEEDLE_simready=legacy;
- const loaded=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(asset),'');assert.deepEqual(loaded.userData.simready.usdMetadata,legacy.usdMetadata);
- assert.equal(createSimreadyExtension(legacy).usdMetadata,undefined);
+test('runtime schema excludes unspecified properties',()=>{
+ const data=payload();data.additionalVendorField={label:'unspecified'};assert.equal(validate(data),false);
 });
 test('writer and loader reject invalid binding identities and runtime labels',async()=>{
  for(const mutate of [data=>{data.bindings[0].path='';},data=>{data.bindings[0].node=-1;},data=>{data.semantics[0].labels=[123];}]){

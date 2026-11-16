@@ -2,13 +2,12 @@
 
 /** @typedef {import('three').Object3D} Object3D */
 /** @typedef {import('./index.js').PhysicsSnapshot} PhysicsSnapshot */
-/** @typedef {import('./index.js').SimreadyMetadata} SimreadyMetadata */
 /** @typedef {import('./index.js').PhysicsIssue} PhysicsIssue */
 /** @typedef {import('./kinematics.js').Mechanism} Mechanism */
 /** @typedef {import('./rapier-types.js').RigidBody} RigidBody */
 /** @typedef {import('./rapier-types.js').World} World */
 /** @typedef {import('./three.js').ObjectBinding} ObjectBinding */
-/** @typedef {{readonly snapshot:import('./index.js').GltfPhysicsSnapshot,readonly usdMetadata?:SimreadyMetadata,readonly semantics:import('./index.js').SimreadySemanticLabels[],readonly root:Object3D,
+/** @typedef {{readonly snapshot:import('./index.js').GltfPhysicsSnapshot,readonly semantics:import('./index.js').SimreadySemanticLabels[],readonly root:Object3D,
  * readonly bindings:ObjectBinding[],readonly mappingIssues:PhysicsIssue[],
  * createMechanism(options?:Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>):Promise<Mechanism&{root:Object3D}>,
  * createSimulation:CreateBoundSimulation}} SimreadyRuntime */
@@ -24,17 +23,14 @@
 /** @typedef {{scene:Object3D,userData?:Record<string,unknown>}} SimreadyLoadResult */
 /** @typedef {{register(factory:(parser:SimreadyParser)=>NeedleSimreadyLoaderPlugin):unknown}} SimreadyLoader */
 
-import {SIMREADY_EXTENSION,encodeMetadata,createSimreadyExtension} from './index.js';
+import {SIMREADY_EXTENSION,validateSimreadyExtension} from './index.js';
 import {bindVisuals,placeAssetRoot,withVisualController} from './three.js';
 import {fromGltfPhysicsSnapshot} from './gltf/coordinates.js';
 export {toGltfPhysicsSnapshot,fromGltfPhysicsSnapshot} from './gltf/coordinates.js';
 export {SIMREADY_EXTENSION} from './index.js';
-import {copyJson} from './json.js';
-import {isRecord,isWireSnapshot,isArray,isBinding,isMetadata,isIssue} from './validation.js';
-import {isMetadataBuffers,restoreMetadataBuffers} from './gltf/metadataBuffers.js';
+import {isRecord} from './validation.js';
 import {limitImageRequests} from './gltf/limitImages.js';
 import {normalizeTextureTransforms} from './gltf/textureTransforms.js';
-import {isRuntimeSemantics,isRuntimeSnapshot} from './gltf/runtimeContract.js';
 /** @param {unknown} value @returns {value is Object3D} */
 const isObject3D=value=>isRecord(value)&&value.isObject3D===true;
 /** @typedef {import('three').Mesh|import('three').Line|import('three').Points} CollisionPrimitive */
@@ -49,20 +45,9 @@ export class NeedleSimreadyLoaderPlugin{
  constructor(parser){this.parser=parser;this.name=SIMREADY_EXTENSION;if(parser.json.extensions?.[SIMREADY_EXTENSION]){limitImageRequests(parser);normalizeTextureTransforms(parser);}}
  /** @param {SimreadyLoadResult} result */
  async afterRoot(result){
-  const data=this.parser.json.extensions?.[SIMREADY_EXTENSION];if(!data)return;
-  if(!isRecord(data))throw new Error('Invalid NEEDLE_simready payload.');
-  if(data.version!==1&&data.version!==2&&data.version!==3)throw new Error('Unsupported NEEDLE_simready version: '+data.version);
-  if(data.version===2?!isMetadataBuffers(data.metadataBuffers):data.metadataBuffers!==undefined)throw new Error('Invalid NEEDLE_simready metadata buffers.');
-  if(!isWireSnapshot(data.snapshot)||!isArray(data.bindings)||!data.bindings.every(isBinding)||(data.version===3?!isRuntimeSemantics(data.semantics):!isMetadata(data.usdMetadata)))throw new Error('Invalid NEEDLE_simready payload.');
-  if(data.version===3){
-   if(Object.keys(data).some(key=>!['version','stageNode','snapshot','bindings','semantics','mappingIssues','extensions','extras'].includes(key))||!isRuntimeSnapshot(data.snapshot)||data.bindings.some(binding=>Object.keys(binding).some(key=>!['node','path','body'].includes(key))))throw new Error('Source properties are not valid SimReady runtime data.');
-   const labels=data.semantics,bindings=data.bindings;
-   if(!isRuntimeSemantics(labels)||labels.some(record=>!bindings.some(binding=>binding.path===record.path)))throw new Error('Invalid SimReady semantic target.');
-  }
-  if(data.mappingIssues!==undefined&&(!isArray(data.mappingIssues)||!data.mappingIssues.every(isIssue)))throw new Error('Invalid NEEDLE_simready mapping issues.');
-  if(data.source)throw new Error('Embedded USD source is not supported by the SimReady runtime contract.');
-  const cloned=copyJson(data.snapshot);
-  if(!isWireSnapshot(cloned))throw new Error('Invalid NEEDLE_simready snapshot.');
+  const payload=this.parser.json.extensions?.[SIMREADY_EXTENSION];if(!payload)return;
+  const data=validateSimreadyExtension(payload);
+  const cloned=structuredClone(data.snapshot);
   /** @type {import('./index.js').GltfPhysicsSnapshot & {shapes:Array<import('./index.js').PhysicsShape & {mesh?:number}>}} */
   const snapshot=cloned;
   for(const shape of snapshot.shapes)if(shape.type==='mesh'){
@@ -104,7 +89,6 @@ export class NeedleSimreadyLoaderPlugin{
    object.userData.usdPath=binding.body?binding.body+'/__visual/'+binding.node:binding.path;
    object.userData.usdSourcePath=binding.path;
    object.userData.usdBodyPath=binding.body;
-   if(binding.instance)object.userData.usdInstanceIdentity=copyJson(binding.instance);
   }
   const bindings=await Promise.all(data.bindings.map(async binding=>({object:await node(binding.node),body:binding.body||binding.path})));
   const ownedBindings=bindings.filter(binding=>snapshot.bodies.some(body=>body.path===binding.body));
@@ -113,12 +97,8 @@ export class NeedleSimreadyLoaderPlugin{
    /** @param {ReadonlyMap<string,{data:import('./index.js').PhysicsBody,body:import('./kinematics.js').BodyPose}>} bodies
     * @param {(item:{path:string,type?:string},reason:string)=>void} _warn @param {AbortSignal} [signal] */
    (bodies,_warn,signal)=>{signal?.throwIfAborted();return bindVisuals({root,bodies,bindings:ownedBindings,worldSpace});};
-  const metadata=data.version===3?undefined:encodeMetadata(data.usdMetadata),mappingIssues=copyJson(data.mappingIssues||[]);
-  if((data.version!==3&&!isMetadata(metadata))||!isArray(mappingIssues)||!mappingIssues.every(isIssue))throw new Error('Invalid NEEDLE_simready metadata.');
-  if(data.version===2){if(!isMetadata(metadata)||!isMetadataBuffers(data.metadataBuffers))throw new Error('Invalid NEEDLE_simready metadata buffers.');await restoreMetadataBuffers(metadata,data.metadataBuffers,this.parser);}
-  const semantics=data.version===3?copyJson(data.semantics):[];
-  if(!isRuntimeSemantics(semantics))throw new Error('Invalid SimReady runtime semantic labels.');
-  for(const binding of data.bindings){const labels=semantics.filter(record=>record.path===binding.path);if(labels.length)(await node(binding.node)).userData.simreadyLabels=copyJson(labels.map(({taxonomy,labels})=>({taxonomy,labels})));}
+  const mappingIssues=structuredClone(data.mappingIssues),semantics=structuredClone(data.semantics);
+  for(const binding of data.bindings){const labels=semantics.filter(record=>record.path===binding.path);if(labels.length)(await node(binding.node)).userData.simreadyLabels=structuredClone(labels.map(({taxonomy,labels})=>({taxonomy,labels})));}
   /** @param {Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>} [options] */
   async function createBoundMechanism(options={}){return withVisualController(root,async()=>{
    const{createMechanism}=await import('./kinematics.js');
@@ -141,7 +121,7 @@ export class NeedleSimreadyLoaderPlugin{
    return Object.assign(await createSimulation(simulationOptions),{root});
   });}
   result.userData||={};
-  const runtime={snapshot,...(isMetadata(metadata)?{usdMetadata:metadata}:{}),semantics,root,bindings:ownedBindings,mappingIssues,createMechanism:createBoundMechanism,
+  const runtime={snapshot,semantics,root,bindings:ownedBindings,mappingIssues,createMechanism:createBoundMechanism,
    createSimulation:/** @type {CreateBoundSimulation} */ (/** @type {unknown} */ (createBoundSimulation))};
   result.userData.simready=runtime;
   runtimes.set(result.scene,runtime);runtimes.set(result,runtime);runtimes.set(runtime,runtime);

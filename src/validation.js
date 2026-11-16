@@ -87,21 +87,6 @@ export function isSnapshot(value) {
         && optional(value, ['articulations'], item => isArray(item) && item.every(record => isRecord(record) && identity(record)
             && ['rootPrims','filteredCollisions','articulatedJoints','articulatedBodies'].every(key => strings(record[key]))));
 }
-/** @param {unknown} value @returns {value is import('./index.js').SimreadyMetadata} */
-export function isMetadata(value) {
-    if (!isRecord(value) || value.version !== 1 || typeof value.time !== 'number' || !isRecord(value.stage) || !isArray(value.prims)) return false;
-    return value.prims.every(prim => isRecord(prim) && identity(prim) && typeof prim.type === 'string'
-        && optional(prim, ['active'], item => item === false) && optional(prim, ['metadata'], isRecord)
-        && optional(prim, ['attributes'], item => isArray(item) && item.every(attribute => isRecord(attribute)
-            && typeof attribute.name === 'string' && attribute.name.length > 0 && typeof attribute.type === 'string' && attribute.type.length > 0 && Object.hasOwn(attribute,'value')
-            && optional(attribute, ['metadata'], isRecord) && optional(attribute, ['connections'], strings)
-            && optional(attribute, ['samples'], samples => isArray(samples) && samples.every(sample => isRecord(sample) && typeof sample.time === 'number' && Object.hasOwn(sample,'value')))))
-        && optional(prim, ['relationships'], item => isArray(item) && item.every(relation => isRecord(relation) && typeof relation.name === 'string'
-            && strings(relation.targets) && optional(relation, ['metadata'], isRecord)))
-        && optional(prim, ['variants'], item => isArray(item) && item.every(variant => isRecord(variant)
-            && typeof variant.name === 'string' && typeof variant.selection === 'string' && strings(variant.choices))));
-}
-
 /** @param {unknown} value @returns {value is import('./index.js').SimreadyBinding} */
 export const isBinding = value => isRecord(value) && typeof value.node === 'number' && Number.isInteger(value.node) && value.node >= 0 && typeof value.path === 'string' && value.path.length > 0 && optional(value, ['body'], text);
 /** @param {unknown} value @returns {value is import('./index.js').WireSnapshot} */

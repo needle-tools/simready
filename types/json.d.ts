@@ -1,6 +1,5 @@
-/** Clone the JSON wire representation; semantic metadata can retain special numbers.
+/** Clone the JSON wire representation.
  * @param {unknown} value
- * @param {boolean} [tagNumbers]
  * @returns {unknown}
  */
-export function copyJson(value: unknown, tagNumbers?: boolean): unknown;
+export function copyJson(value: unknown): unknown;

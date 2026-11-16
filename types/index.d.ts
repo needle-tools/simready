@@ -4,8 +4,7 @@ export function validateSnapshot(snapshot: unknown): PhysicsSnapshot;
 /** Invalid references are distinct from a solver's feature limitations. */
 /** @param {PhysicsSnapshot} snapshot */
 export function getSnapshotIssues(snapshot: PhysicsSnapshot): PhysicsIssue[];
-/** Export only runtime physics and defined semantic labels. Legacy USD property
- * bags are intentionally not part of this contract.
+/** Build the runtime interchange contract.
  * @param {{snapshot:WireSnapshot,stageNode:number,bindings:SimreadyBinding[],semantics?:SimreadySemanticLabels[],mappingIssues?:PhysicsIssue[]}} options
  * @returns {SimreadyRuntimeExtension}
  */
@@ -16,11 +15,12 @@ export function createSimreadyRuntimeExtension({ snapshot, stageNode, bindings, 
     semantics?: SimreadySemanticLabels[];
     mappingIssues?: PhysicsIssue[];
 }): SimreadyRuntimeExtension;
-/** Build the runtime interchange contract. Source metadata is not an export option.
- * @param {Parameters<typeof createSimreadyRuntimeExtension>[0]} options */
-export function createSimreadyExtension(options: Parameters<typeof createSimreadyRuntimeExtension>[0]): SimreadyRuntimeExtension;
-export function encodeMetadata(value: unknown): unknown;
+/** Validate the runtime interchange descriptor.
+ * @param {unknown} value @returns {SimreadyRuntimeExtension}
+ */
+export function validateSimreadyExtension(value: unknown): SimreadyRuntimeExtension;
 export const SIMREADY_EXTENSION: "NEEDLE_simready";
+export { createSimreadyRuntimeExtension as createSimreadyExtension };
 export type PhysicsVector = [number, number, number];
 export type PhysicsRotation = [number, number, number, number];
 export type PhysicsIssue = {
@@ -155,39 +155,6 @@ export type SimreadyBinding = {
     body?: string;
     instance?: unknown;
 };
-export type SimreadyMetadata = {
-    version: 1;
-    time: number;
-    stage: Record<string, unknown>;
-    prims: Array<{
-        path: string;
-        type: string;
-        active?: false;
-        metadata?: Record<string, unknown>;
-        attributes?: Array<{
-            name: string;
-            type: string;
-            value: unknown;
-            metadata?: Record<string, unknown>;
-            connections?: string[];
-            default?: unknown;
-            samples?: Array<{
-                time: number;
-                value: unknown;
-            }>;
-        }>;
-        relationships?: Array<{
-            name: string;
-            metadata?: Record<string, unknown>;
-            targets: string[];
-        }>;
-        variants?: Array<{
-            name: string;
-            selection: string;
-            choices: string[];
-        }>;
-    }>;
-};
 export type WireShape = Omit<PhysicsShape, "points" | "indices"> & {
     mesh?: number;
     points?: never;
@@ -196,19 +163,6 @@ export type WireShape = Omit<PhysicsShape, "points" | "indices"> & {
 export type GltfPhysicsSnapshot = Omit<PhysicsSnapshot, "metersPerUnit" | "kilogramsPerUnit" | "upAxis">;
 export type WireSnapshot = Omit<GltfPhysicsSnapshot, "shapes"> & {
     shapes: WireShape[];
-};
-export type LegacySimreadyExtension = {
-    version: 1;
-    stageNode: number;
-    snapshot: WireSnapshot;
-    usdMetadata: SimreadyMetadata;
-    bindings: SimreadyBinding[];
-    mappingIssues: PhysicsIssue[];
-};
-export type MetadataBuffer = import("./gltf/metadataBuffers.js").MetadataBuffer;
-export type SimreadyBufferedExtension = Omit<LegacySimreadyExtension, "version"> & {
-    version: 2;
-    metadataBuffers: MetadataBuffer[];
 };
 /**
  * Semantic labels attach to an exported binding identity, not a USD prim description.
@@ -226,4 +180,4 @@ export type SimreadyRuntimeExtension = {
     semantics: SimreadySemanticLabels[];
     mappingIssues: PhysicsIssue[];
 };
-export type SimreadyExtension = SimreadyRuntimeExtension | LegacySimreadyExtension | SimreadyBufferedExtension;
+export type SimreadyExtension = SimreadyRuntimeExtension;

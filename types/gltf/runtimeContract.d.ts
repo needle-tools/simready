@@ -4,3 +4,5 @@ export function runtimeSnapshot(source: import("../index.js").WireSnapshot): imp
 export function isRuntimeSnapshot(source: import("../index.js").WireSnapshot): boolean;
 /** @param {unknown} value @returns {value is import('../index.js').SimreadySemanticLabels[]} */
 export function isRuntimeSemantics(value: unknown): value is import("../index.js").SimreadySemanticLabels[];
+/** @param {unknown} value @returns {value is import('../index.js').SimreadyRuntimeExtension} */
+export function isRuntimeExtension(value: unknown): value is import("../index.js").SimreadyRuntimeExtension;

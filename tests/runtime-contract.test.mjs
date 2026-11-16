@@ -23,5 +23,5 @@ test('runtime import rejects source-data leakage instead of treating it as a fea
 });
 test('runtime contract handles arbitrary JSON key ordering and rejects unknown semantic targets',async()=>{
  const data=createSimreadyRuntimeExtension(options());data.snapshot.bodies[0]=Object.fromEntries(Object.entries(data.snapshot.bodies[0]).reverse());await load(data);
- assert.throws(()=>createSimreadyRuntimeExtension({...options(),semantics:[{path:'/Absent',taxonomy:'class',labels:['cabinet']}]}),/semantic/);
+ assert.throws(()=>createSimreadyRuntimeExtension({...options(),semantics:[{path:'/Absent',taxonomy:'class',labels:['cabinet']}]}),/Invalid/);
 });

@@ -1,7 +1,5 @@
 /** @param {unknown} value @returns {value is import('./index.js').PhysicsSnapshot} */
 export function isSnapshot(value: unknown): value is import("./index.js").PhysicsSnapshot;
-/** @param {unknown} value @returns {value is import('./index.js').SimreadyMetadata} */
-export function isMetadata(value: unknown): value is import("./index.js").SimreadyMetadata;
 export function isRecord(value: unknown): value is Record<string, unknown>;
 export function isArray(value: unknown): value is unknown[];
 export function isIssue(value: unknown): value is import("./index.js").PhysicsIssue;

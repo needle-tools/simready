@@ -268,11 +268,6 @@ vendor attributes or numeric archives of those values. Unimplemented source
 features remain explicit conversion diagnostics and external source evidence;
 retaining their authored values is not runtime support.
 
-Consumers MAY read legacy version 1 and 2 files. Those versions used `usdMetadata`
-and optional numeric buffer views, whose input representation is described by the
-legacy schemas. Runtime producers MUST emit version 3 rather than copying that
-source property representation into new assets.
-
 ## Related extensions
 
 | Specification                                                                                                                                                                     | Role in a combined asset                                                                   |
@@ -298,9 +293,7 @@ Tools which rewrite an asset containing this extension MUST preserve:
 - Defined semantic labels and runtime identities.
 
 A node reorder MUST update `stageNode` and `bindings[].node`. A mesh reorder
-MUST update `snapshot.shapes[].mesh`. A buffer-view reorder MUST update
-legacy `metadataBuffers[].bufferView` inputs. Those legacy views are live input data even when no mesh
-accessor refers to them. Companion-extension indices must also be
+MUST update `snapshot.shapes[].mesh`. Companion-extension indices must also be
 updated according to their own specifications. Strings containing USD paths or
 source instancer indices MUST NOT be treated as glTF table indices.
 

@@ -6,108 +6,18 @@
   "allOf": [
     {
       "$ref": "common.schema.json#/$defs/property"
-    },
-    {
-      "if": {
-        "properties": {
-          "version": {
-            "const": 2
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "metadataBuffers"
-        ],
-        "properties": {
-          "metadataBuffers": {}
-        }
-      },
-      "else": {
-        "properties": {
-          "metadataBuffers": false
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "version": {
-            "const": 3
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "semantics"
-        ],
-        "properties": {
-          "usdMetadata": false,
-          "metadataBuffers": false,
-          "bindings": {
-            "items": {
-              "properties": {
-                "instance": false
-              },
-              "propertyNames": {
-                "enum": [
-                  "node",
-                  "path",
-                  "body",
-                  "extensions",
-                  "extras"
-                ]
-              },
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "semantics": {},
-          "snapshot": {
-            "$ref": "runtime-snapshot.schema.json"
-          }
-        },
-        "propertyNames": {
-          "enum": [
-            "version",
-            "stageNode",
-            "snapshot",
-            "bindings",
-            "semantics",
-            "mappingIssues",
-            "extensions",
-            "extras"
-          ]
-        }
-      },
-      "else": {
-        "required": [
-          "usdMetadata"
-        ],
-        "properties": {
-          "semantics": false,
-          "usdMetadata": {}
-        }
-      }
     }
   ],
   "properties": {
     "version": {
-      "enum": [
-        1,
-        2,
-        3
-      ]
+      "const": 3
     },
     "stageNode": {
       "$ref": "common.schema.json#/$defs/index",
       "description": "Index into glTF nodes; the asset-local reference root. Its ordinary glTF transform places the asset in the scene."
     },
     "snapshot": {
-      "$ref": "snapshot.schema.json"
-    },
-    "usdMetadata": {
-      "$ref": "metadata.schema.json"
+      "$ref": "runtime-snapshot.schema.json"
     },
     "bindings": {
       "type": "array",
@@ -128,13 +38,21 @@
           },
           "body": {
             "$ref": "common.schema.json#/$defs/bodyReference"
-          },
-          "instance": {}
+          }
         },
         "required": [
           "node",
           "path"
-        ]
+        ],
+        "propertyNames": {
+          "enum": [
+            "node",
+            "path",
+            "body",
+            "extensions",
+            "extras"
+          ]
+        }
       }
     },
     "mappingIssues": {
@@ -143,55 +61,6 @@
         "$ref": "common.schema.json#/$defs/issue"
       },
       "default": []
-    },
-    "source": false,
-    "metadataBuffers": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              ]
-            }
-          },
-          "bufferView": {
-            "$ref": "common.schema.json#/$defs/index"
-          },
-          "componentType": {
-            "enum": [
-              "float32",
-              "float64"
-            ]
-          },
-          "shape": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 8,
-            "items": {
-              "type": "integer",
-              "minimum": 1
-            }
-          }
-        },
-        "required": [
-          "path",
-          "bufferView",
-          "componentType",
-          "shape"
-        ]
-      }
     },
     "semantics": {
       "type": "array",
@@ -227,6 +96,19 @@
     "version",
     "stageNode",
     "snapshot",
-    "bindings"
-  ]
+    "bindings",
+    "semantics"
+  ],
+  "propertyNames": {
+    "enum": [
+      "version",
+      "stageNode",
+      "snapshot",
+      "bindings",
+      "mappingIssues",
+      "semantics",
+      "extensions",
+      "extras"
+    ]
+  }
 }
