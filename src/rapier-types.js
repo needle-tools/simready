@@ -45,7 +45,7 @@
  * setGravityScale?(value:number):RigidBodyDescriptor;
  * }} RigidBodyDescriptor
  */
-/** @typedef {{intoRaw?:()=>{free():void}|null|undefined; vertices?:Float32Array; shapes?:CookingShape[]}} CookingShape */
+/** @typedef {{intoRaw?:()=>{free():void}|null|undefined; vertices?:Float32Array; shapes?:CookingShape[]; positions?:Vector[]}} CookingShape */
 /** @typedef {{
  * shape?:CookingShape;
  * setTranslation(x:number,y:number,z:number):ColliderDescriptor;

@@ -84,6 +84,7 @@ export type CookingShape = {
     } | null | undefined;
     vertices?: Float32Array;
     shapes?: CookingShape[];
+    positions?: Vector[];
 };
 export type ColliderDescriptor = {
     shape?: CookingShape;

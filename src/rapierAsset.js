@@ -27,6 +27,7 @@
 import {Quaternion, Vector3} from 'three';
 import {shiftInertiaToCenterOfMass} from './massProperties.js';
 import {repairConvexCompound} from './rapierHull.js';
+import {cookConvexDecomposition} from './rapierDecomposition.js';
 
 /** The drive a coupled joint uses when it has none: stiff and critically damped, independent of mass. */
 /** @type {import('./description.js').DriveDescription} */
@@ -129,10 +130,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
                 case 'capsule': case 'cylinder': case 'cone': desc = R.ColliderDesc[shape.type](shape.halfHeight, shape.radius); break;
                 case 'plane': desc = R.ColliderDesc.halfspace?.(vec(shape.normal)); break;
                 case 'convexHull': desc = R.ColliderDesc.convexHull(shape.points); break;
-                case 'convexDecomposition': desc = R.ColliderDesc.convexDecomposition?.(shape.points, shape.indices,
-                    // Normal clamping across decomposition cuts can discard
-                    // valid contacts between thin, curved compound shapes.
-                    {resolution: shape.resolution ?? 64, concavity: shape.concavity ?? .001, maxConvexHulls: shape.maxHulls ?? 128}, 0); break;
+                case 'convexDecomposition': desc = cookConvexDecomposition(R, shape, item.id); break;
                 case 'triangleMesh': desc = R.ColliderDesc.trimesh(shape.points, shape.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES_TWO_SIDED); break;
             }
             if (!desc) { warn(data, 'Collider could not be constructed.'); continue; }
