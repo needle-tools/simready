@@ -20,6 +20,17 @@ export function repairConvexCompound(R, descriptor, path, adaptations) {
         const raw = part.intoRaw();
         if (raw) { raw.free(); continue; }
         const vertices = part.vertices;
+        if (vertices?.length === 6 && R.ColliderDesc.segment) {
+            // VHACD can emit a two-endpoint, zero-volume hull. Its convex
+            // mesh is invalid, but Rapier can represent that same line exactly.
+            const segment = R.ColliderDesc.segment(new Vector3().fromArray(vertices), new Vector3().fromArray(vertices, 3)).shape;
+            const cooked = segment?.intoRaw?.();
+            if (!segment || !cooked) throw new Error(`Cannot cook decomposition segment ${i} at ${path}.`);
+            cooked.free(); parts[i] = segment;
+            adaptations.push({path, source: 'two-point decomposition hull', target: 'segment',
+                reason: 'A zero-volume native hull is represented by its exact endpoints without adding thickness.'});
+            continue;
+        }
         if (!vertices || !R.ColliderDesc.convexMesh) throw new Error(`Cannot cook convex decomposition hull ${i} at ${path}.`);
         const points = Array.from({length: vertices.length / 3}, (_, n) => new Vector3().fromArray(vertices, n * 3));
         const indices = new Map(points.map((point, n) => [point, n]));

@@ -155,6 +155,7 @@ export type RapierModule<B extends RigidBody = RigidBody, W extends World<B> = W
         halfspace?: (normal: Vector) => ColliderDescriptor;
         convexHull(points: Float32Array): ColliderDescriptor | null;
         convexMesh?: (points: Float32Array, indices: Uint32Array) => ColliderDescriptor | null;
+        segment?: (a: Vector, b: Vector) => ColliderDescriptor;
         convexDecomposition?: (points: Float32Array, indices: Uint32Array, options: {
             resolution: number;
             concavity: number;

@@ -91,6 +91,7 @@
  * cone(halfHeight:number,radius:number):ColliderDescriptor;halfspace?:(normal:Vector)=>ColliderDescriptor;
  * convexHull(points:Float32Array):ColliderDescriptor|null;
  * convexMesh?:(points:Float32Array,indices:Uint32Array)=>ColliderDescriptor|null;
+ * segment?:(a:Vector,b:Vector)=>ColliderDescriptor;
  * convexDecomposition?:(points:Float32Array,indices:Uint32Array,options:{resolution:number,concavity:number,maxConvexHulls:number},flags:number)=>ColliderDescriptor|null;
  * trimesh(points:Float32Array,indices:Uint32Array,flags?:number):ColliderDescriptor;
  * };

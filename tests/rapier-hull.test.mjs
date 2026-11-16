@@ -34,3 +34,18 @@ test('rebuild rejected convex faces without changing compound points, transforms
 test('unrepairable decomposition fails with its source path instead of discarding a part', () => {
     assert.throws(() => repairConvexCompound(R, {shape:{shapes:[{intoRaw:()=>null}]}}, '/Broken', []), /hull 0 at \/Broken/);
 });
+
+test('retains a zero-volume two-point decomposition hull as an exact segment', () => {
+    const vertices = new Float32Array([.1,.2,.3, .1,.2,1.3]);
+    const invalid = R.ColliderDesc.convexMesh(vertices, new Uint32Array([0,1,0,1,0,0])).shape;
+    assert.equal(invalid.intoRaw(), undefined);
+    const descriptor = new R.ColliderDesc(new R.Compound([invalid], [{x:0,y:0,z:0}], [{x:0,y:0,z:0,w:1}]));
+    const adaptations=[];
+    repairConvexCompound(R,descriptor,'/Line',adaptations);
+    const part=descriptor.shape.shapes[0];
+    assert.deepEqual({...part.a},{x:vertices[0],y:vertices[1],z:vertices[2]});
+    assert.deepEqual({...part.b},{x:vertices[3],y:vertices[4],z:vertices[5]});
+    assert.equal(adaptations[0].target,'segment');
+    const world=new R.World({x:0,y:0,z:0});
+    try{const collider=world.createCollider(descriptor);assert.equal(collider.volume(),0);world.step();}finally{world.free();}
+});

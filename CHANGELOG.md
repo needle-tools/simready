@@ -8,6 +8,7 @@
 ## Unreleased
 
 - Repair invalid convex-decomposition faces from the original hull vertices so thin collision parts remain usable without dropping shapes or filling cavities.
+- Retain two-point decomposition hulls as exact zero-thickness segments rather than rejecting the entire compound.
 
 - Preserve per-body gravity and explicit continuous-collision choices in snapshots and both physics adapters.
 
