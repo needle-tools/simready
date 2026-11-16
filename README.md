@@ -310,7 +310,9 @@ freeing the host world. Needle handles this registration automatically.
 Joint frames, limits, drives, collision filters and mass properties are retained.
 Fixed articulation links use reduced coordinates; movable links use impulse
 constraints. SDF meshes use convex decomposition with concave compound contacts,
-rather than PhysX SDF evaluation. Mimic joints follow their leader through a drive
+rather than PhysX SDF evaluation. Rapier also uses convex compounds for moving
+triangle meshes when the supplied backend supports compound cooking; static and
+kinematic triangle meshes retain their authored surfaces. Mimic joints follow their leader through a drive
 that is updated after each step, so they lag slightly under load. `backend.adaptations`
 describes conversions.
 

@@ -36,6 +36,10 @@ test('Rapier adapts moving triangle meshes while static, kinematic and other bac
         assert.equal(describeSimulation(fixed,{capabilities:caps}).colliders[0].shape.type,'triangleMesh');
     }
     assert.equal(describeSimulation(source,{capabilities:{...caps,backend:'needle'}}).colliders[0].shape.type,'triangleMesh');
+    // Older hosts retain their existing triangle-mesh path when compound
+    // cooking is not part of the supplied backend's capabilities.
+    const older=describeSimulation(source,{capabilities:{...caps,shapes:new Set(['triangleMesh'])}});
+    assert.equal(older.colliders[0].shape.type,'triangleMesh');assert.deepEqual(older.issues,[]);
 });
 
 test('spherical cone limits from the joint limit use the smaller authored angle on backends with spherical limits', () => {

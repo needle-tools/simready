@@ -143,7 +143,7 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                 // Rapier recommends compounds for moving concave surfaces.
                 // Dense dynamic triangle/triangle contacts can exhaust its
                 // native contact workspace even with finite body velocities.
-                const dynamicTriangleMesh = capabilities.backend === 'rapier' && owner
+                const dynamicTriangleMesh = capabilities.backend === 'rapier' && capabilities.shapes.has('convexDecomposition') && owner
                     && owner.rigidBodyEnabled !== false && !owner.kinematicBody
                     && (!data.approximation || data.approximation === 'none');
                 if (data.approximation === 'convexHull') shape = {type: 'convexHull', points};
