@@ -5,7 +5,7 @@ import {NeedleSimreadyLoaderPlugin} from '../src/gltf.js';
 
 test('SimReady image loads bound Blob concurrency and retain arguments, context and results',async()=>{
  let active=0,peak=0;const marker={};
- const parser={json:{extensions:{NEEDLE_simready:{version:1}}},async loadImageSource(index,loader){
+ const parser={json:{extensions:{NEEDLE_simready:{version:3}}},async loadImageSource(index,loader){
   assert.equal(this,parser);assert.equal(loader,marker);active++;peak=Math.max(peak,active);
   await new Promise(resolve=>setImmediate(resolve));active--;return index*3;
  }};

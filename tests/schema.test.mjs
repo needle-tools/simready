@@ -83,9 +83,8 @@ test('examples load and joint posing moves the bound panel in the authored frame
  }
 });
 
-test('the schema rejects malformed versions, frames, wire geometry and semantic values',()=>{
+test('the schema rejects malformed frames, wire geometry and semantic values',()=>{
  const cases=[
-  data=>{data.version=2;},
   data=>{data.stageNode=-1;},
   data=>{data.bindings[0].node=.5;},
   data=>{data.snapshot.bodies[0].position=[1,2];},
@@ -100,9 +99,6 @@ test('the schema rejects malformed versions, frames, wire geometry and semantic 
   ...['capsule','cylinder','cone'].map(type=>data=>{Object.assign(data.snapshot.shapes[0],{type,radius:1});delete data.snapshot.shapes[0].halfHeight;}),
   data=>{data.snapshot.joints[0].drive={enabled:true,targetPosition:0};},
   data=>{data.semantics[0].labels=[123];},
-  data=>{data.usdMetadata={prims:[]};},
-  data=>{data.metadataBuffers=[];},
-  data=>{data.source={archive:'original.usdz'};},
  ];
  for(const mutate of cases){const data=payload();mutate(data);assert.equal(validate(data),false,mutate.toString());}
 });
