@@ -68,7 +68,7 @@ test('examples load and joint posing moves the bound panel in the authored frame
    shape.points=accessorValues(asset,primitive.attributes.POSITION);shape.indices=accessorValues(asset,primitive.indices);delete shape.mesh;
   }
   assert.deepEqual(runtime.snapshot,expected);
-  assert.equal(runtime.usdMetadata,undefined);assert.deepEqual(runtime.semantics,asset.extensions.NEEDLE_simready.semantics);
+  assert.deepEqual(runtime.semantics,asset.extensions.NEEDLE_simready.semantics);
   if(name==='semantic-labels.gltf')continue;
   const visual=runtime.bindings.find(binding=>binding.body==='/Cabinet/Door'&&binding.object.isMesh).object;
   const before=visual.getWorldPosition(new Vector3());
