@@ -71,6 +71,16 @@ test('Needle world creates one Engine physics asset with visual identities and s
   asset.dispose();assert.equal(engine.disposals,0,'the Engine already released the asset');
  }finally{sim.dispose();h.free();}
 });
+
+test('world-to-world source joints do not reach the Engine self-constraint rejection',async()=>{
+ const h=host(),sim=await createNeedleWorld({context:h.context}),source=snapshot();
+ source.joints.push({path:'/Unused',type:'fixed',body0:'',body1:'',rotation0:q,rotation1:q,position0:[1,0,0],position1:[0,0,0]});
+ try{
+  const asset=await sim.addAsset({snapshot:source});
+  assert.deepEqual(h.assets[0].description.joints,[]);assert.deepEqual(asset.unsupported,[]);
+  assert.equal(source.joints.length,1);assert.equal(asset.backend.adaptations.some(item=>item.source==='world-to-world joint'),true);
+ }finally{sim.dispose();h.free();}
+});
 test('instances request distinct Engine-owned identities instead of sharing one render node',async()=>{
  const h=host(),root=new Object3D(),mesh=new InstancedMesh(new BoxGeometry(),new MeshBasicMaterial(),2);root.add(mesh);h.scene.add(root);
  const sim=await createNeedleWorld({context:h.context});

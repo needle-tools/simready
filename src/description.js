@@ -218,6 +218,11 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
     const jointData = new Map();
     for (const data of snapshot.joints || []) {
         if (data.jointEnabled === false) continue;
+        if (!data.body0 && !data.body1) {
+            adaptations.push({path: data.path, source: 'world-to-world joint', target: 'no active constraint',
+                reason: 'Both joint endpoints are fixed to the world; no rigid body can move through this constraint.'});
+            continue;
+        }
         if (data.body0 && !bodyData.has(data.body0) || data.body1 && !bodyData.has(data.body1)) { warn(data, 'A joint body is outside the selected simulation scene.'); continue; }
         /** @type {JointDescription} */
         const joint = {id: data.path, type: 'fixed', body0: data.body0 || undefined, body1: data.body1 || undefined,

@@ -7,6 +7,17 @@ const capabilities = features => ({backend: 'test', shapes: new Set(['box']), jo
 const snapshot = joint => ({metersPerUnit: 1, kilogramsPerUnit: 1, upAxis: 'Y', scenes: [], materials: [], groups: [], shapes: [],
     bodies: [{path: '/Lamp', position: [0, -1, 0], rotation: [0, 0, 0, 1]}], joints: [{path: '/Socket', type: 'spherical', body1: '/Lamp', ...joint}]});
 
+test('world-to-world joints retain source data without creating a constraint on the same fixed body', () => {
+    const source = snapshot({type: 'fixed', body0: '', body1: ''}), before = structuredClone(source);
+    const description = describeSimulation(source, {capabilities: capabilities([])});
+    assert.deepEqual(description.joints, []);
+    assert.deepEqual(description.issues, []);
+    assert.equal(description.adaptations[0].source, 'world-to-world joint');
+    assert.deepEqual(source, before);
+    assert.equal(describeSimulation(snapshot({type: 'fixed'}), {capabilities: capabilities([])}).joints.length, 1,
+        'a joint connecting one rigid body to the world remains active');
+});
+
 test('SDF cooking quality follows physical extent rather than stage units or unscaled mesh coordinates', () => {
     const describe = (metersPerUnit, extent, meshScale = 1) => {
         const source = {...snapshot({}), metersPerUnit, joints: [], shapes: [{
