@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- Repair invalid convex-decomposition faces from the original hull vertices so thin collision parts remain usable without dropping shapes or filling cavities.
+
 - Preserve per-body gravity and explicit continuous-collision choices in snapshots and both physics adapters.
 
 - Manipulate spherical joints with quaternion controls and pointer dragging, including swing limits and reversed attachments.

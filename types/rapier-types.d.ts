@@ -78,7 +78,15 @@ export type RigidBodyDescriptor = {
     setCcdEnabled(value: boolean): RigidBodyDescriptor;
     setGravityScale?(value: number): RigidBodyDescriptor;
 };
+export type CookingShape = {
+    intoRaw?: () => {
+        free(): void;
+    } | null | undefined;
+    vertices?: Float32Array;
+    shapes?: CookingShape[];
+};
 export type ColliderDescriptor = {
+    shape?: CookingShape;
     setTranslation(x: number, y: number, z: number): ColliderDescriptor;
     setRotation(value: Rotation): ColliderDescriptor;
     setFriction(value: number): ColliderDescriptor;
@@ -146,6 +154,7 @@ export type RapierModule<B extends RigidBody = RigidBody, W extends World<B> = W
         cone(halfHeight: number, radius: number): ColliderDescriptor;
         halfspace?: (normal: Vector) => ColliderDescriptor;
         convexHull(points: Float32Array): ColliderDescriptor | null;
+        convexMesh?: (points: Float32Array, indices: Uint32Array) => ColliderDescriptor | null;
         convexDecomposition?: (points: Float32Array, indices: Uint32Array, options: {
             resolution: number;
             concavity: number;

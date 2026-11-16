@@ -26,6 +26,7 @@
 
 import {Quaternion, Vector3} from 'three';
 import {shiftInertiaToCenterOfMass} from './massProperties.js';
+import {repairConvexCompound} from './rapierHull.js';
 
 /** The drive a coupled joint uses when it has none: stiff and critically damped, independent of mass. */
 /** @type {import('./description.js').DriveDescription} */
@@ -135,6 +136,7 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
                 case 'triangleMesh': desc = R.ColliderDesc.trimesh(shape.points, shape.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES_TWO_SIDED); break;
             }
             if (!desc) { warn(data, 'Collider could not be constructed.'); continue; }
+            if (shape.type === 'convexDecomposition') repairConvexCompound(R, desc, item.id, adaptations);
             desc.setFriction(item.friction).setRestitution(item.restitution);
             if (item.contactSkin !== undefined) desc.setContactSkin(item.contactSkin);
             desc.setDensity(item.density);
