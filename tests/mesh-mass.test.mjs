@@ -13,7 +13,7 @@ function concaveMesh(){
  }
  return {points,indices};
 }
-for(const approximation of ['sdf','convexDecomposition']) test(`${approximation} dynamic concave meshes preserve cavities and collide with independently imported objects`,async()=>{
+for(const approximation of ['sdf','convexDecomposition','none']) test(`${approximation} dynamic concave meshes preserve cavities and collide with independently imported objects`,async()=>{
  const host=createSimulationWorld({rapier:R});
  try{
   await host.addAsset({snapshot:{...empty,shapes:[{path:'/Ground',type:'cube',halfExtents:[10,.5,10],position:[0,-.5,0],rotation:q}]}});

@@ -24,6 +24,20 @@ test('SDF cooking quality follows physical extent rather than stage units or uns
     assert.deepEqual(metres.points, scaled.points);
 });
 
+test('Rapier adapts moving triangle meshes while static, kinematic and other backend meshes retain their surfaces',()=>{
+    const source={...snapshot({}),joints:[],shapes:[{path:'/Surface',body:'/Lamp',type:'mesh',approximation:'none',
+        points:[0,0,0,1,0,0,0,1,0,0,0,1],indices:[0,2,1,0,1,3,0,3,2,1,2,3]}]};
+    const caps={...capabilities([]),backend:'rapier',shapes:new Set(['triangleMesh','convexDecomposition'])};
+    const before=structuredClone(source),dynamic=describeSimulation(source,{capabilities:caps});
+    assert.equal(dynamic.colliders[0].shape.type,'convexDecomposition');assert.equal(dynamic.adaptations[0].source,'dynamic triangle mesh');
+    assert.deepEqual(source,before);
+    for(const body of [{rigidBodyEnabled:false},{kinematicBody:true}]){
+        const fixed={...source,bodies:[{...source.bodies[0],...body}]};
+        assert.equal(describeSimulation(fixed,{capabilities:caps}).colliders[0].shape.type,'triangleMesh');
+    }
+    assert.equal(describeSimulation(source,{capabilities:{...caps,backend:'needle'}}).colliders[0].shape.type,'triangleMesh');
+});
+
 test('spherical cone limits from the joint limit use the smaller authored angle on backends with spherical limits', () => {
     const source = snapshot({axis: 'Y', limit: {enabled: true, lower: 30, upper: 20}});
     validateSnapshot(source);

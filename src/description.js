@@ -140,9 +140,15 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                 const points = Float32Array.from(data.points || [], (v, i) => v * (data.meshScale?.[i % 3] ?? 1));
                 const indices = Uint32Array.from(data.indices || []);
                 if (!points.length) { warn(data, 'Mesh collision points are unavailable.'); continue; }
+                // Rapier recommends compounds for moving concave surfaces.
+                // Dense dynamic triangle/triangle contacts can exhaust its
+                // native contact workspace even with finite body velocities.
+                const dynamicTriangleMesh = capabilities.backend === 'rapier' && owner
+                    && owner.rigidBodyEnabled !== false && !owner.kinematicBody
+                    && (!data.approximation || data.approximation === 'none');
                 if (data.approximation === 'convexHull') shape = {type: 'convexHull', points};
-                else if (data.approximation === 'sdf' || data.approximation === 'convexDecomposition') {
-                    if (!capabilities.shapes.has('convexDecomposition')) { warn(data, `${data.approximation === 'sdf' ? 'SDF-source' : 'Convex-decomposed'} mesh collision requires ${capabilities.backend === 'rapier' ? 'Rapier ' : ''}convex decomposition support.`); continue; }
+                else if (data.approximation === 'sdf' || data.approximation === 'convexDecomposition' || dynamicTriangleMesh) {
+                    if (!capabilities.shapes.has('convexDecomposition')) { warn(data, `${dynamicTriangleMesh ? 'Dynamic triangle' : data.approximation === 'sdf' ? 'SDF-source' : 'Convex-decomposed'} mesh collision requires ${capabilities.backend === 'rapier' ? 'Rapier ' : ''}convex decomposition support.`); continue; }
                     // Aim for 5 mm cells within the cooking budget. A coarse
                     // grid on a large chassis can close wheel/joint clearances;
                     // small parts do not need the larger grid.
@@ -155,8 +161,9 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
                     const extent = Math.max(...max.map((value, axis) => value - min[axis])) * mpu;
                     const resolution = Math.max(64, Math.min(128, 2 ** Math.ceil(Math.log2(extent / .005))));
                     shape = {type: 'convexDecomposition', points, indices, resolution, concavity: .001, maxHulls: 128};
-                    adaptations.push({path: data.path, source: data.approximation, target: 'convex decomposition',
-                        reason: 'The authored collision surface is represented by a concave compound of convex parts.'});
+                    adaptations.push({path: data.path, source: dynamicTriangleMesh ? 'dynamic triangle mesh' : data.approximation ?? 'mesh', target: 'convex decomposition',
+                        reason: dynamicTriangleMesh ? 'The moving concave surface uses convex parts for robust Rapier contacts and continuous collision detection.'
+                            : 'The authored collision surface is represented by a concave compound of convex parts.'});
                 }
                 // Preserve authored concave surfaces. A single convex hull would seal drawers and cavities.
                 else if (!data.approximation || data.approximation === 'none') shape = {type: 'triangleMesh', points, indices};
