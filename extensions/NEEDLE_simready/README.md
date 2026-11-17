@@ -44,15 +44,9 @@ physical data. Relevant data includes physics records, authored SimReady
 metadata, semantic-label schemas and non-visual material properties. Ordinary
 models without that data MUST NOT acquire an empty `NEEDLE_simready` payload.
 
-An asset containing the extension MUST list `NEEDLE_simready` in
-`extensionsUsed`. If bodies, colliders, joints or collision groups are part of
-its intended behavior, it MUST also list it in `extensionsRequired`. A
-metadata-only asset MAY omit it from `extensionsRequired`.
+An asset containing the extension MUST list `NEEDLE_simready` in `extensionsUsed`. Producers SHOULD leave `NEEDLE_simready` and the companion physics extensions out of `extensionsRequired` so applications can load the ordinary glTF rendering representation without a simulation runtime.
 
-A visual-only application can use the ordinary glTF representation, but an
-application which requires the asset's simulation behavior MUST NOT treat an
-unsupported required extension as a complete simulation asset. The companion
-physics extensions do not override this requirement.
+An application that needs simulation behavior must explicitly register the SimReady or physics runtime and verify its capabilities. Optional extension declarations permit visual loading; they do not certify simulation support.
 
 ## glTF schema updates
 
