@@ -38,6 +38,7 @@ export function fromGltfPhysicsSnapshot(source){
 function convertAngles(snapshot,factor){
  for(const body of snapshot.bodies)if(body.angularVelocity)body.angularVelocity=/** @type {[number,number,number]} */(body.angularVelocity.map(value=>value*factor));
  for(const joint of snapshot.joints){
+  if(joint.referenceAngle!==undefined)joint.referenceAngle*=factor;
   const isAngular=angular(joint);
   if(isAngular){
    if(joint.limit)for(const key of /** @type {const} */(['lower','upper'])){const value=joint.limit[key];if(value!==null)joint.limit[key]=value*factor;}

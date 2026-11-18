@@ -84,3 +84,16 @@ for (const sign of [1, -1])
             mechanism.dispose();
         }
     });
+
+test('a revolute rest reference picks the equivalent turn inside limits, including reversed endpoints', async () => {
+    for (const reversed of [false,true]) {
+        const data = offsetRotorSnapshot(1), joint = data.joints[0];
+        if (reversed) { joint.body0=joint.body1; joint.body1=''; }
+        for (const [reference,expected] of [[740,720],[1060,1080],[2000,1080]]) {
+            joint.referenceAngle=reference;
+            const mechanism=await createMechanism({snapshot:data});
+            try { assert.ok(Math.abs(mechanism.getJointValue('/Motor')-expected)<.001); }
+            finally { mechanism.dispose(); }
+        }
+    }
+});

@@ -64,6 +64,7 @@ const joint = value => isRecord(value) && identity(value) && typeof value.type =
     && optional(value, ['body0','body1'], text) && optional(value, ['axis'], axis) && optional(value, ['position0','position1'], v3)
     && optional(value, ['rotation0','rotation1'], v4)
     && optional(value, ['jointEnabled','collisionEnabled','excludeFromArticulation','minEnabled','maxEnabled'], boolean)
+    && optional(value, ['referenceAngle'], angle => value.type === 'revolute' && Number.isFinite(angle))
     && optional(value, ['minDistance','maxDistance'], number)
     && optional(value, ['breakForce','breakTorque'], item => item === null || number(item))
     && optional(value, ['limit'], item => isRecord(item) && boolean(item.enabled) && (item.lower === null || number(item.lower)) && (item.upper === null || number(item.upper)))

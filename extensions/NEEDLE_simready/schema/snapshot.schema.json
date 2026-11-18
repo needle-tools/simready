@@ -479,6 +479,9 @@
           "$ref": "common.schema.json#/$defs/property"
         }
       ],
+      "dependentSchemas": {
+        "referenceAngle": { "properties": { "type": { "const": "revolute" } } }
+      },
       "properties": {
         "path": {
           "$ref": "common.schema.json#/$defs/identity"
@@ -549,6 +552,10 @@
             "Z"
           ],
           "default": "X"
+        },
+        "referenceAngle": {
+          "type": "number",
+          "description": "Optional revolute rest angle in radians. Selects the equivalent complete turn of the measured body pose, subject to joint limits."
         },
         "limit": {
           "$ref": "#/$defs/limit"

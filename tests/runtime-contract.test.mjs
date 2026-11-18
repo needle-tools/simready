@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createSimreadyRuntimeExtension} from '../src/index.js';
-import {registerSimreadyLoader,getSimreadyRuntime} from '../src/gltf.js';
+import {registerSimreadyLoader,getSimreadyRuntime,toGltfPhysicsSnapshot,fromGltfPhysicsSnapshot} from '../src/gltf.js';
 const source=()=>({bodies:[{path:'/Body',position:[0,1,0],rotation:[0,0,0,1],mass:2,gravityScale:0,continuousCollision:false,physx:{vendor:'do not archive'},attributes:[{name:'xformOp:transform',value:[]}]}],shapes:[],joints:[],groups:[],materials:[],scenes:[],unsupported:[]});
 const options=()=>({snapshot:source(),stageNode:0,bindings:[{node:1,path:'/Body',instance:{rawUsd:'forbidden'}}],semantics:[{path:'/Body',taxonomy:'class',labels:['cabinet']}]});
 const asset=payload=>({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1]},{}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:payload}});
@@ -24,4 +24,16 @@ test('runtime import validates the closed descriptor fields',async()=>{
 test('runtime contract handles arbitrary JSON key ordering and rejects unknown semantic targets',async()=>{
  const data=createSimreadyRuntimeExtension(options());data.snapshot.bodies[0]=Object.fromEntries(Object.entries(data.snapshot.bodies[0]).reverse());await load(data);
  assert.throws(()=>createSimreadyRuntimeExtension({...options(),semantics:[{path:'/Absent',taxonomy:'class',labels:['cabinet']}]}),/Invalid/);
+});
+
+test('authored full-turn references survive the closed glTF runtime contract',async()=>{
+ const snapshot=source();snapshot.metersPerUnit=1;snapshot.bodies[0].position=[0,0,0];
+ snapshot.joints.push({path:'/Turn',type:'revolute',body1:'/Body',axis:'Z',referenceAngle:720,limit:{enabled:true,lower:720,upper:1080}});
+ const gltf=toGltfPhysicsSnapshot(snapshot);
+ const data=createSimreadyRuntimeExtension({...options(),snapshot:gltf});
+ assert.equal(data.snapshot.joints[0].referenceAngle,4*Math.PI);
+ assert.equal(fromGltfPhysicsSnapshot(data.snapshot).joints[0].referenceAngle,720);
+ const runtime=getSimreadyRuntime(await load(data)),mechanism=await runtime.createMechanism();
+ try{assert.ok(Math.abs(mechanism.getJointValue('/Turn')-720)<1e-3);}
+ finally{mechanism.dispose();}
 });

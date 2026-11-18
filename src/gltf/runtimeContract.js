@@ -6,7 +6,7 @@ const mass=['mass','density','centerOfMass','diagonalInertia','principalAxes'];
 const fields={
  bodies:['path','position','rotation','scale','rigidBodyEnabled','kinematicBody','startsAsleep','linearVelocity','angularVelocity','linearDamping','angularDamping','gravityScale','continuousCollision','filteredCollisions','simulationOwners',...mass],
  shapes:['path','type','body','position','rotation','scale','collisionEnabled','simulationOwners','materials','filteredCollisions','collisionGroups','halfExtents','radius','halfHeight','axis','approximation','meshScale','mesh',...mass],
- joints:['path','type','body0','body1','position0','position1','rotation0','rotation1','jointEnabled','collisionEnabled','excludeFromArticulation','axis','limit','drive','minEnabled','maxEnabled','breakForce','breakTorque','minDistance','maxDistance','mimic'],
+ joints:['path','type','body0','body1','position0','position1','rotation0','rotation1','jointEnabled','collisionEnabled','excludeFromArticulation','axis','referenceAngle','limit','drive','minEnabled','maxEnabled','breakForce','breakTorque','minDistance','maxDistance','mimic'],
  materials:['path','staticFriction','dynamicFriction','restitution','density'],
  groups:['path','filteredGroups','invertFilteredGroups','mergedGroups'],
  scenes:['path','gravityDirection','gravityMagnitude'],

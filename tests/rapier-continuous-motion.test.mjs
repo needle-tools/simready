@@ -158,3 +158,17 @@ for (const shared of [false, true])
             else sim.dispose();
         }
     });
+
+test('a saved multi-turn pose initializes the continuous Rapier coordinate and survives reset',async()=>{
+    const snapshot=screwSnapshot(), angle=4800*Math.PI/180;
+    snapshot.bodies[0].rotation=[0,0,Math.sin(angle/2),Math.cos(angle/2)];
+    snapshot.bodies[1].position[0]=.04;
+    snapshot.joints[0].referenceAngle=4800;
+    const sim=await createSimulation({rapier:R,snapshot});
+    try {
+        assert.ok(Math.abs(sim.getJointValue('/Motor')-4800)<.001);
+        assert.ok(Math.abs(sim.getJointValue('/ScrewSlide')-.04)<1e-6);
+        sim.reset();
+        assert.ok(Math.abs(sim.getJointValue('/Motor')-4800)<.001);
+    } finally { sim.dispose(); }
+});

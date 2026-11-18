@@ -24,6 +24,7 @@
  * remove():void
  * }} RapierAsset */
 
+import {authoredAngle} from './jointCoordinates.js';
 import {Quaternion, Vector3} from 'three';
 import {shiftInertiaToCenterOfMass} from './massProperties.js';
 import {repairConvexCompound} from './rapierHull.js';
@@ -272,7 +273,10 @@ export function buildRapierAsset({rapier: R, world, description, warn}) {
             if (!pair || item.type !== 'revolute') continue;
             const phase=wrap(jointPosition(item,...pair)), previous=coordinates.get(item.id);
             let value=previous ? previous.value+wrap(phase-previous.phase) : phase;
-            if(!previous && item.limits) {
+            const authored=description.jointData.get(item.id);
+            if(!previous && authored?.referenceAngle!==undefined) {
+                value=authoredAngle(phase*180/Math.PI,authored)*Math.PI/180;
+            } else if(!previous && item.limits) {
                 const turn=2*Math.PI,first=Math.ceil((item.limits.lower-phase-1e-8)/turn),last=Math.floor((item.limits.upper-phase+1e-8)/turn);
                 if(first<=last)value+=Math.max(first,Math.min(last,0))*turn;
             }

@@ -100,6 +100,7 @@ export type PhysicsJoint = {
     collisionEnabled?: boolean;
     excludeFromArticulation?: boolean;
     axis?: "X" | "Y" | "Z";
+    referenceAngle?: number;
     limit?: PhysicsLimit;
     drive?: PhysicsDrive;
     minEnabled?: boolean;

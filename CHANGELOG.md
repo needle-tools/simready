@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- Preserve authored full-revolution joint references through manipulation, simulation and the glTF runtime descriptor.
+
 - Keep world-to-world joints in the runtime snapshot without creating a redundant constraint on the physics world's fixed body.
 
 - Cook convex-decomposition collision meshes independently of their local origin and coordinate scale, preserving their original size and mass frame.

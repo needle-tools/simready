@@ -201,6 +201,10 @@ error. Their result is force for linear joints and torque for angular joints.
 With `acceleration: true`, the result is linear or angular acceleration instead;
 stiffness then uses inverse seconds squared and damping inverse seconds.
 
+For a multi-turn revolute joint, `referenceAngle` records the rest angle in radians.
+The body frames determine the orientation. A solver chooses the equivalent angle
+nearest this reference within the joint limits, preserving whole turns across reloads.
+
 The format carries joint data independently of a solver's available joint
 classes. Converting a joint into a different physical constraint MUST be
 reported as an adaptation; silently discarding a limit, drive or coupling is

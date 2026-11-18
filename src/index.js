@@ -30,7 +30,7 @@
     path: string; type: string; body0?: string; body1?: string;
     position0?: PhysicsVector; position1?: PhysicsVector; rotation0?: PhysicsRotation; rotation1?: PhysicsRotation;
     jointEnabled?: boolean; collisionEnabled?: boolean; excludeFromArticulation?:boolean; axis?: 'X' | 'Y' | 'Z';
-    limit?: PhysicsLimit; drive?: PhysicsDrive; minEnabled?: boolean; maxEnabled?: boolean;
+    referenceAngle?:number; limit?: PhysicsLimit; drive?: PhysicsDrive; minEnabled?: boolean; maxEnabled?: boolean;
     breakForce?: number | null; breakTorque?: number | null; minDistance?: number; maxDistance?: number;
     mimic?: {joint:string;multiplier:number;offset:number};
 }} PhysicsJoint */
