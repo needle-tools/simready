@@ -8,6 +8,7 @@
 ## Unreleased
 
 - Preserve authored full-revolution joint references through manipulation, simulation and the glTF runtime descriptor.
+- Preserve SimReady and standard physics references in glTF Transform workflows, with shared collider and simulation-frame resource queries.
 
 - Keep world-to-world joints in the runtime snapshot without creating a redundant constraint on the physics world's fixed body.
 
