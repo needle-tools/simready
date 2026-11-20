@@ -36,7 +36,9 @@ export function createSimulationRuntime<B extends RuntimeBody>({ snapshot, mode,
         velocity?: number;
     }): boolean;
     /** @param {unknown} object @param {number} [instanceIndex] */
-    bodyForObject: (object: unknown, instanceIndex?: number) => unknown;
+    bodyForObject: (object: unknown, instanceIndex?: number) => {
+        data: import("./rapier.js").PhysicsBody;
+    } | null | undefined;
     /** @param {string} path @param {Vector} position */
     beginDrag(path: string, position: Vector): boolean;
     /** @param {Vector} position */
@@ -87,8 +89,4 @@ export type RuntimeBackend<B extends RuntimeBody> = {
     step?(dt?: number): void;
     timestep?(): number;
 };
-export type RuntimeBinding = {
-    sync(): void;
-    reset(): void;
-    bodyForObject(object: unknown, instanceIndex?: number): unknown;
-};
+export type RuntimeBinding = Pick<import("./rapier.js").VisualBinding, "sync" | "reset" | "bodyForObject">;

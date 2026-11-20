@@ -28,7 +28,7 @@
  * step?(dt?:number):void; timestep?():number;
  * }} RuntimeBackend
  */
-/** @typedef {{sync():void,reset():void,bodyForObject(object:unknown,instanceIndex?:number):unknown}} RuntimeBinding */
+/** @typedef {Pick<import('./rapier.js').VisualBinding,'sync'|'reset'|'bodyForObject'>} RuntimeBinding */
 
 import {Quaternion, Vector3} from 'three';
 import {jointValue} from './jointCoordinates.js';

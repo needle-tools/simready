@@ -50,7 +50,9 @@ export type VisualBinding = {
     sync(): void;
     reset(): void;
     dispose?(): void;
-    bodyForObject(object: unknown, instanceIndex?: number): unknown;
+    bodyForObject(object: unknown, instanceIndex?: number): {
+        data: PhysicsBody;
+    } | null | undefined;
     root?: import("three").Object3D;
     bindings?: import("./three.js").ObjectBinding[];
 };
@@ -94,7 +96,9 @@ export type Simulation<W = World<import("./rapier-types.js").RigidBody>, B = imp
     }): boolean;
     reset(): void;
     dispose(): void;
-    bodyForObject(object: unknown, instanceIndex?: number): unknown;
+    bodyForObject(object: unknown, instanceIndex?: number): {
+        data: PhysicsBody;
+    } | null | undefined;
     beginDrag(path: string, position: import("./rapier-types.js").Vector): boolean;
     moveDrag(position: import("./rapier-types.js").Vector): void;
     endDrag(): void;

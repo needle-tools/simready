@@ -23,7 +23,9 @@ export function createMechanism({ snapshot, bindVisuals, loadKinematics, dragMod
     setJointRotation(path: string, next: import("./index.js").PhysicsRotation): boolean;
     jointForBody: (path: string) => JointRecord | null;
     /** @param {import('three').Object3D} object @param {number} [index] */
-    bodyForObject(object: import("three").Object3D, index?: number): unknown;
+    bodyForObject(object: import("three").Object3D, index?: number): {
+        data: import("./rapier.js").PhysicsBody;
+    } | null | undefined;
     /** @param {string} path @param {import('three').Vector3Like} position */
     beginDrag(path: string, position: import("three").Vector3Like): boolean;
     /** @param {import('three').Vector3Like} position */

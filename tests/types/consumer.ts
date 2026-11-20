@@ -3,6 +3,8 @@ import {type PhysicsSnapshot,createSimreadyExtension} from '@needle-tools/simrea
 import {createSimulation,createSimulationWorld} from '@needle-tools/simready/rapier';
 import {getSimreadyRuntime,registerSimreadyLoader} from '@needle-tools/simready/gltf';
 import {createMechanism} from '@needle-tools/simready/kinematics';
+import {bindPointerDrag} from '@needle-tools/simready/three';
+import {PerspectiveCamera, Group} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 // The descriptors from the README omit values which the adapters default.
@@ -51,6 +53,11 @@ importedBody.notAPhysicsMethod();
 importedWorld.notAWorldSetting=true;
 const mechanism=await createMechanism({snapshot});
 mechanism.update(1/120);
+const camera=new PerspectiveCamera(), root=new Group(), element=document.createElement('canvas');
+bindPointerDrag({controller:mechanism, camera, root, element}).dispose();
+bindPointerDrag({controller:standalone, camera, root, element}).dispose();
+const pickedPath:string|undefined=mechanism.bodyForObject(root)?.data.path;
+void pickedPath;
 const joint=mechanism.jointForBody('/Box');
 if(joint){
  const lower:number=joint.lower;void lower;

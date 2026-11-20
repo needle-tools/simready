@@ -23,7 +23,7 @@
 /** @template {RapierModule} R
  * @typedef {ReturnType<WorldOf<R>['createRigidBody']>} BodyOf */
 /** @typedef {{sync():void, reset():void, dispose?():void,
- * bodyForObject(object:unknown,instanceIndex?:number):unknown,
+ * bodyForObject(object:unknown,instanceIndex?:number):{data:PhysicsBody}|null|undefined,
  * root?:import('three').Object3D,bindings?:import('./three.js').ObjectBinding[]}} VisualBinding */
 /** @template [B=RigidBody]
  * @typedef {{data:PhysicsBody,body:B,colliders:Collider[]}} SimulationBodyRecord */
@@ -41,7 +41,7 @@
  * readonly joints:Map<string,Joint>,readonly unsupported:PhysicsIssue[],
  * play():void,pause():void,isPlaying():boolean,update(dt:number):void,step(dt?:number):void,
  * getJointValue(path:string):number|null,setJointTarget(path:string,target:{position?:number,velocity?:number}):boolean,
- * reset():void,dispose():void,bodyForObject(object:unknown,instanceIndex?:number):unknown,
+ * reset():void,dispose():void,bodyForObject(object:unknown,instanceIndex?:number):{data:PhysicsBody}|null|undefined,
  * beginDrag(path:string,position:import('./rapier-types.js').Vector):boolean,
  * moveDrag(position:import('./rapier-types.js').Vector):void,endDrag():void
  * }} Simulation */
