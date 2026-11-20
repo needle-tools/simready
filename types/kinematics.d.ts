@@ -1,6 +1,6 @@
 /** Bounded USD joint manipulation. The optional IK core has no physics/WASM runtime. */
 /** @param {MechanismOptions} options */
-export function createMechanism({ snapshot, bindVisuals, loadKinematics, framePolicy }: MechanismOptions): Promise<{
+export function createMechanism({ snapshot, bindVisuals, loadKinematics, dragMode, framePolicy }: MechanismOptions): Promise<{
     mode: "interaction";
     bodies: Map<string, BodyRecord>;
     joints: Map<string, JointRecord>;
@@ -82,6 +82,7 @@ export type JointRecord = {
 export type Mechanism = Awaited<ReturnType<typeof createMechanism>>;
 export type MechanismOptions = {
     snapshot: PhysicsSnapshot;
+    dragMode?: "joint" | "point";
     loadKinematics?: () => Promise<unknown>;
     framePolicy?: "strict" | "preserve-rest";
     bindVisuals?: (bodies: MechanismBodies, warn: (item: {

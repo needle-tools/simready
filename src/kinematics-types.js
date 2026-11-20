@@ -2,7 +2,7 @@
 
 /** Minimum IK interface used by the mechanism adapter. The upstream declarations
  * use boxed numeric types and omit methods present in the pinned implementation.
- * @typedef {{name:string,matrixWorld:Float32Array,
+ * @typedef {{name:string,matrixWorld:Float32Array,position:Float32Array,quaternion:Float32Array,
  * setPosition(x:number,y:number,z:number):void,
  * setQuaternion(x:number,y:number,z:number,w:number):void,
  * updateMatrixWorld(force?:boolean):void}} Frame
@@ -15,6 +15,7 @@
  * @typedef {{maxIterations:number,translationConvergeThreshold:number,
  * rotationConvergeThreshold:number,useSVD:boolean,solve():void}} Solver
  * @typedef {{Link:new()=>Link,Joint:new()=>Joint,Solver:new(root:Link)=>Solver,
+ * Goal?:new()=>Joint & {setGoalDoF(...axes:number[]):void},
  * DOF:{X:number,Y:number,Z:number,EX:number,EY:number,EZ:number}}} KinematicsModule
  */
 import {isRecord} from './validation.js';
@@ -33,7 +34,8 @@ function isKinematicsModule(value){
  return ['X','Y','Z','EX','EY','EZ'].every(key=>typeof dof[key]==='number')
   &&constructorWith(value.Link,['setPosition','setQuaternion','updateMatrixWorld','addChild'])
   &&constructorWith(value.Joint,['setPosition','setQuaternion','setDoF','setDoFValue','getDoFValue','setMinLimit','setMaxLimit','getClosureError','makeClosure','addChild'])
-  &&constructorWith(value.Solver,['solve']);
+  &&constructorWith(value.Solver,['solve'])
+  &&(value.Goal === undefined || constructorWith(value.Goal,['setGoalDoF','setPosition','makeClosure']));
 }
 /** Check the optional injected module at its loading boundary.
  * @param {()=>Promise<unknown>} [load] @returns {Promise<KinematicsModule>}

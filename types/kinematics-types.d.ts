@@ -9,6 +9,8 @@ export function loadKinematicsModule(load?: () => Promise<unknown>): Promise<Kin
 export type Frame = {
     name: string;
     matrixWorld: Float32Array;
+    position: Float32Array;
+    quaternion: Float32Array;
     setPosition(x: number, y: number, z: number): void;
     setQuaternion(x: number, y: number, z: number, w: number): void;
     updateMatrixWorld(force?: boolean): void;
@@ -55,6 +57,9 @@ export type KinematicsModule = {
     Link: new () => Link;
     Joint: new () => Joint;
     Solver: new (root: Link) => Solver;
+    Goal?: new () => Joint & {
+        setGoalDoF(...axes: number[]): void;
+    };
     DOF: {
         X: number;
         Y: number;

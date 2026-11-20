@@ -89,6 +89,7 @@ export function bindVisuals({root, bodies, bindings, worldSpace = false}) {
     };
 }
 
+export {bindPointerDrag} from './three/pointerDrag.js';
 export {createJointHelpers} from './three/jointHelpers.js';
 
 /** Place stage-local render geometry into a host world's Y-up coordinate frame. */

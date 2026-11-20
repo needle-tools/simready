@@ -15,9 +15,10 @@ isDynamic():boolean}} BodyPose */
 /** @typedef {{data:PhysicsJoint,joint:Joint,sign:number,angular:boolean,dof:number|null,
  * parent:string,child:string,closure:boolean,lower:number,upper:number,initial:number,rotationDofs:number[],initialRotation:Quaternion|null}} JointRecord */
 /** @typedef {Awaited<ReturnType<typeof createMechanism>>} Mechanism */
-/** @typedef {{snapshot:PhysicsSnapshot,loadKinematics?:()=>Promise<unknown>,framePolicy?:'strict'|'preserve-rest',
+/** @typedef {{snapshot:PhysicsSnapshot,dragMode?:'joint'|'point',loadKinematics?:()=>Promise<unknown>,framePolicy?:'strict'|'preserve-rest',
  * bindVisuals?:(bodies:MechanismBodies,warn:(item:{path:string,type?:string},reason:string)=>void)=>VisualBinding|Promise<VisualBinding>}} MechanismOptions */
 
+import {pointDragFactory} from './kinematicPointDrag.js';
 import {authoredAngle} from './jointCoordinates.js';
 import {Euler,Matrix4,Quaternion,Vector3} from 'three';
 import {loadKinematicsModule} from './kinematics-types.js';
@@ -41,12 +42,13 @@ const rigid=link=>new Matrix4().fromArray(link.matrixWorld);
 
 /** Bounded USD joint manipulation. The optional IK core has no physics/WASM runtime. */
 /** @param {MechanismOptions} options */
-export async function createMechanism({snapshot,bindVisuals,loadKinematics,framePolicy='preserve-rest'}){
+export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragMode='joint',framePolicy='preserve-rest'}){
  if(!['strict','preserve-rest'].includes(framePolicy))throw new TypeError('Invalid joint frame policy.');
  snapshot=Object.assign({bodies:[],shapes:[],joints:[],materials:[],groups:[],scenes:[]},snapshot);
  validateSnapshot(snapshot);
  snapshot={...snapshot,joints:[...(snapshot.joints||[])]};
- const {Link,Joint,Solver,DOF}=await loadKinematicsModule(loadKinematics);
+ const core=await loadKinematicsModule(loadKinematics);
+ const {Link,Joint,Solver,DOF}=core;
  /** @type {PhysicsIssue[]} */
  const unsupported=[];
  /** @type {import('./description.js').Adaptation[]} */
@@ -66,7 +68,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,frame
  function body(path){const record=bodies.get(path);if(!record)throw new Error('Unavailable mechanism body: '+path);return record;}
  /** @param {{path:string,type?:string}} data @param {string} reason */
  const warn=(data,reason)=>unsupported.push({path:data.path,type:data.type,reason});
- /** @type {{record:JointRecord,point:Vector3,pivot:Vector3,axis:Vector3,initial:number,angle:number,rotation:Quaternion|null,frameRotation:Quaternion}|null} */
+ /** @type {{record:JointRecord,point:Vector3,pivot:Vector3,axis:Vector3,initial:number,angle:number,rotation:Quaternion|null,frameRotation:Quaternion}|((point:import('three').Vector3Like)=>void)|null} */
  let drag=null;
  /** @type {VisualBinding|undefined} */
  let visuals;
@@ -204,6 +206,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,frame
   for(const item of bodies.values())if(item.position.distanceTo(new Vector3(...item.data.position))>tolerance*10||item.rotation.angleTo(new Quaternion(...item.data.rotation))>1e-3){warn(item.data,'Authored joint frames do not agree with this body pose.');valid=false;}
   const binding=await bindVisuals?.(bodies,warn)||emptyVisualBinding;visuals=binding;
   function sync(){updatePoses();binding.sync();}
+  const beginPointDrag=dragMode==='point'?pointDragFactory(core,bodies,joints,parents,scale,sync):null;
   function closeEnough(){
    for(const record of joints.values())if(record.rotationDofs.length){const q=rotationValue(record);if(limitRotation(record.data,q).angleTo(q)>1e-5)return false;}
    return closures.every(({joint})=>{const p=new Float64Array(3),r=new Float64Array(3);joint.getClosureError(p,r);return Math.hypot(...p)<tolerance*5&&Math.hypot(...r)<1e-4;});
@@ -268,13 +271,18 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,frame
    /** @param {string} path @param {import('three').Vector3Like} position */
    beginDrag(path,position){
     const record=jointForBody(path);if(!playing||!valid||!record)return false;
-    updatePoses();const parent=record.parent?rigid(body(record.parent).link):identity;
+    updatePoses();
+    drag=beginPointDrag?.(path,position)??null;
+    if(drag)return true;
+    const parent=record.parent?rigid(body(record.parent).link):identity;
     const origin=parent.clone().multiply(frame(record.data,record.sign<0?1:0)),p=new Vector3(),q=new Quaternion();origin.decompose(p,q,new Vector3());
     drag={record,point:new Vector3().copy(position),pivot:p,axis:axis(record.data.axis).applyQuaternion(q),initial:value(record),angle:0,rotation:record.rotationDofs.length?rotationValue(record,false):null,frameRotation:q};return true;
    },
    /** @param {import('three').Vector3Like} position */
    moveDrag(position){
-    if(!drag)return;const{record,axis,pivot,point,initial}=drag;let delta;
+    if(!drag)return;
+    if(typeof drag==='function'){drag(position);return;}
+    const{record,axis,pivot,point,initial}=drag;let delta;
     if(drag.rotation){const a=point.clone().sub(pivot),b=new Vector3().copy(position).sub(pivot);if(a.lengthSq()<1e-12||b.lengthSq()<1e-12)return;
      const q=new Quaternion().setFromUnitVectors(a.normalize(),b.normalize()),f=drag.frameRotation;
      q.premultiply(f.clone().invert()).multiply(f).multiply(drag.rotation);if(record.sign<0)q.invert();setRotation(record,q);return;

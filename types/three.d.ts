@@ -45,6 +45,7 @@ export function placeAssetRoot(root: Object3D, snapshot: import("./index.js").Ph
 export function withVisualController<T extends {
     dispose(): void;
 }>(root: Object3D, create: () => T | Promise<T>): Promise<T>;
+export { bindPointerDrag } from "./three/pointerDrag.js";
 export { createJointHelpers } from "./three/jointHelpers.js";
 export type Object3D = import("three").Object3D;
 export type BodyPose = import("./kinematics.js").BodyPose;

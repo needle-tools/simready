@@ -239,6 +239,32 @@ the results from `mechanism.bodies`. For Three.js visuals, pass a `bindVisuals`
 callback using the `/three` entry's explicit `{object, body, instanceIndex?}`
 bindings. It preserves each visual's initial offset from its owning body.
 
+## Dragging articulated parts
+
+Enable point dragging to pose an open chain by grabbing its surface. Picking a lamp shade can move both the shoulder and the elbow. Hinges, drawers, mimic joints and closed linkages retain their joint constraints. The default `dragMode` is `'joint'` for applications that drive one coordinate at a time.
+
+```js
+import {bindPointerDrag} from '@needle-tools/simready/three';
+
+const mechanism = await runtime.createMechanism({dragMode: 'point'});
+mechanism.play();
+const pointer = bindPointerDrag({
+  element: renderer.domElement,
+  camera,
+  root: mechanism.root,
+  controller: mechanism,
+  onMove: requestRender, // for on-demand rendering
+});
+
+// When unloading this viewer or replacing its controller:
+pointer.dispose();
+mechanism.dispose();
+```
+
+The adapter raycasts the nearest visible surface and respects instance bindings. Accepted grabs follow a camera-facing plane through the hit. Misses, stationary foreground parts and modified clicks remain available to camera controls. Hosts with their own picking can supply `pick(event, raycaster, controller)` and return a body path and world-space hit point. Call `pointer.cancel()` before replacing a live controller. For XR input, send the tracked point in mechanism-local coordinates directly to `beginDrag`, `moveDrag` and `endDrag`.
+
+The kinematics solver installs by default as an optional npm dependency and loads when a mechanism is created. Consumers that only use the data APIs can omit optional dependencies.
+
 ## Controller lifetime
 
 A mechanism stays alive across joint changes and drag gestures. Use
