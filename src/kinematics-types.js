@@ -41,8 +41,14 @@ function isKinematicsModule(value){
  * @param {()=>Promise<unknown>} [load] @returns {Promise<KinematicsModule>}
  */
 export async function loadKinematicsModule(load){
+ const unavailable='Kinematic posing requires the optional closed-chain-ik core. Install SimReady with optional dependencies enabled or supply loadKinematics.';
  /** @type {unknown} */
- const value=await (load?load():import('closed-chain-ik/core'));
- if(!isKinematicsModule(value))throw new TypeError('Invalid kinematics module.');
+ let value;
+ if(load)value=await load();
+ else {
+  try { value=await import('closed-chain-ik/core'); }
+  catch(cause){throw new Error(unavailable,{cause});}
+ }
+ if(!isKinematicsModule(value))throw new TypeError(load?'Invalid kinematics module.':unavailable);
  return value;
 }
