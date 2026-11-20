@@ -676,7 +676,6 @@
       "mappingIssues": []
     },
     "KHR_physics_rigid_bodies": {
-      "physicsMaterials": [],
       "physicsJoints": [
         {
           "limits": [

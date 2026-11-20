@@ -37,14 +37,9 @@ joints and metres for linear joints loaded from glTF.
 | Fixed, revolute, prismatic or unlimited spherical joint | Two attachment nodes and a Khronos joint definition, with representable limits and drives. |
 | Semantic labels | Defined runtime `semantics` records; unsupported source features remain conversion diagnostics and external source evidence. |
 
-The implemented proposal reference is
-[`glTF_Physics` at `9dc61cb3474ff9a51f58d3592f79d5c9e572056a`](https://github.com/eoineoineoin/glTF_Physics/tree/9dc61cb3474ff9a51f58d3592f79d5c9e572056a/extensions/2.0/Khronos).
-This is an explicit compatibility target, not a claim of conformance to every
-subsequent physics draft. The current Khronos registry lists
-[`KHR_physics_rigid_bodies`](https://github.com/KhronosGroup/glTF/pull/2424)
-and [`KHR_collision_shapes`](https://github.com/KhronosGroup/glTF/pull/2370)
-as proposals under development. The earlier implicit-shape proposal and the
-new core-shape work must not be confused with ratified glTF 2.0 features.
+The glTF 2.0 projection follows the [rigid-body review draft](https://github.com/eoineoineoin/glTF/tree/13ffdd2d681736c3fdbac0d53b4f490770c178e4/extensions/2.0/Khronos/KHR_physics_rigid_bodies) and the [implicit-shapes review draft](https://github.com/eoineoineoin/glTF/tree/f817a1b252dcee25fa14174a49bc219310f61ddb/extensions/2.0/Khronos/KHR_implicit_shapes). A mesh collider uses `collider.geometry.node` to reference a mesh-bearing node outside the rendered scene. The Needle snapshot references the same mesh through `snapshot.shapes[].mesh`. Compound triggers identify descendant trigger nodes in `trigger.nodes`.
+
+The [Khronos registry](https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md) lists the shapes proposal under `KHR_collision_shapes`. The linked draft defines the wire identifier `KHR_implicit_shapes`.
 
 ## glTF 2.1 shapes
 

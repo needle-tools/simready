@@ -77,6 +77,23 @@ export class ImplicitShapesExtension extends Extension {
     return this;
   }
 }
+/** @param {Record<string, any>} payload */
+function compoundMembers(payload) {
+  const members = payload.trigger?.nodes;
+  if (members === undefined) return [];
+  if (!Array.isArray(members) || !members.length || new Set(members).size !== members.length
+    || payload.trigger.geometry !== undefined || payload.trigger.collisionFilter !== undefined) {
+    throw new Error('Invalid compound trigger.nodes.');
+  }
+  return members.map((_, i) => `trigger.nodes.${i}`);
+}
+
+/** @param {import('@gltf-transform/core').Node} owner @param {import('@gltf-transform/core').Node} member */
+function isDescendant(owner, member) {
+  for (let parent = member.getParentNode(); parent; parent = parent.getParentNode()) if (parent === owner) return true;
+  return false;
+}
+
 export class PhysicsBodiesExtension extends Extension {
   static EXTENSION_NAME = PHYSICS_BODIES;
   extensionName = PHYSICS_BODIES;
@@ -86,6 +103,7 @@ export class PhysicsBodiesExtension extends Extension {
     const root = this.document.getRoot(), json = context.jsonDoc.json;
     /** @type {Map<number, PhysicsHullData>} */
     const hullViews = new Map();
+    const legacyNodes = new Map();
     const rootData = json.extensions?.[PHYSICS_BODIES];
     if (rootData) root.setExtension(PHYSICS_BODIES, new PhysicsData(this.document.getGraph()).setPayload(rootData));
     for (const [index, definition] of (json.nodes ?? []).entries()) {
@@ -94,13 +112,34 @@ export class PhysicsBodiesExtension extends Extension {
       if (!payload && !hull) continue;
       const property = new PhysicsData(this.document.getGraph()).setPayload(payload ?? {});
       for (const role of ['collider', 'trigger']) {
-        for (const kind of ['node', 'mesh']) {
-          const value = property.getPayload()[role]?.geometry?.[kind];
-          if (value === undefined) continue;
-          const target = Number.isInteger(value) ? (kind === 'node' ? context.nodes : context.meshes)[value] : undefined;
-          if (!target) throw new Error(`Invalid SimReady ${role} geometry ${kind} reference.`);
-          property.setReference(`${role}.geometry.${kind}`, target);
+        const geometry = property.getPayload()[role]?.geometry;
+        if (!geometry) continue;
+        if (['shape', 'node', 'mesh'].filter(key => geometry[key] !== undefined).length !== 1) {
+          throw new Error(`Invalid ${role}.geometry: expected exactly one geometry source.`);
         }
+        if (geometry.mesh !== undefined) {
+          // Older exports stored a mesh index directly. Keep it outside the render scene.
+          const mesh = Number.isInteger(geometry.mesh) && context.meshes[geometry.mesh];
+          if (!mesh) throw new Error(`Invalid ${role}.geometry.mesh reference.`);
+          let target = legacyNodes.get(mesh);
+          if (!target) {
+            target = this.document.createNode().setMesh(mesh);
+            legacyNodes.set(mesh, target);
+          }
+          delete geometry.mesh;
+          geometry.node = 0; // The graph reference supplies the serialized index.
+          property.setReference(`${role}.geometry.node`, target);
+        } else if (geometry.node !== undefined) {
+          const target = Number.isInteger(geometry.node) && context.nodes[geometry.node];
+          if (!target) throw new Error(`Invalid ${role}.geometry.node reference.`);
+          property.setReference(`${role}.geometry.node`, target);
+        }
+      }
+      for (const [i, path] of compoundMembers(property.getPayload()).entries()) {
+        const member = property.getPayload().trigger.nodes[i];
+        if (!Number.isInteger(member) || !(/** @type {{trigger?:object}|undefined} */ (json.nodes?.[member]?.extensions?.[PHYSICS_BODIES]))?.trigger
+          || !isDescendant(context.nodes[index], context.nodes[member])) throw new Error(`Invalid ${path} target.`);
+        property.setReference(path, context.nodes[member]);
       }
       const connected = property.getPayload().joint?.connectedNode;
       if (connected !== undefined) {
@@ -146,7 +185,13 @@ export class PhysicsBodiesExtension extends Extension {
   write(context) {
     const root = this.document.getRoot();
     const data = root.getExtension(PHYSICS_BODIES);
-    if (data instanceof PhysicsData) (context.jsonDoc.json.extensions ??= {})[PHYSICS_BODIES] = structuredClone(data.getPayload());
+    if (data instanceof PhysicsData) {
+      const payload = structuredClone(data.getPayload());
+      for (const key of ['physicsMaterials', 'physicsJoints', 'collisionFilters']) {
+        if (Array.isArray(payload[key]) && !payload[key].length) delete payload[key];
+      }
+      (context.jsonDoc.json.extensions ??= {})[PHYSICS_BODIES] = payload;
+    }
     for (const node of root.listNodes()) {
       const property = node.getExtension(PHYSICS_BODIES);
       if (!(property instanceof PhysicsData)) continue;
@@ -154,11 +199,14 @@ export class PhysicsBodiesExtension extends Extension {
       const paths = ['collider', 'trigger'].flatMap(role => ['node', 'mesh']
         .filter(kind => payload[role]?.geometry?.[kind] !== undefined).map(kind => `${role}.geometry.${kind}`));
       if (payload.joint?.connectedNode !== undefined) paths.push('joint.connectedNode');
+      paths.push(...compoundMembers(payload));
       for (const path of paths) {
         const target = property.getReference(path);
         const index = path.endsWith('.mesh') ? context.meshIndexMap.get(/** @type {import('@gltf-transform/core').Mesh} */ (target))
           : context.nodeIndexMap.get(/** @type {import('@gltf-transform/core').Node} */ (target));
         if (index === undefined) throw new Error(`SimReady ${path} target was removed during optimization.`);
+        if (path.startsWith('trigger.nodes.') && (!(/** @type {PhysicsData|null} */ (target?.getExtension(PHYSICS_BODIES)))?.getPayload().trigger
+          || !isDescendant(node, /** @type {import('@gltf-transform/core').Node} */ (target)))) throw new Error(`Invalid ${path} target.`);
         const keys = path.split('.');
         let parent = payload;
         for (const key of keys.slice(0, -1)) parent = parent[key];
@@ -166,6 +214,13 @@ export class PhysicsBodiesExtension extends Extension {
       }
       const definition = context.jsonDoc.json.nodes?.[/** @type {number} */ (context.nodeIndexMap.get(node))];
       if (!definition) throw new Error('SimReady body node was removed during export.');
+      for (const role of ['collider', 'trigger']) {
+        const geometry = payload[role]?.geometry;
+        if (geometry?.mesh !== undefined) {
+          geometry.node = (context.jsonDoc.json.nodes ??= []).push({ mesh: geometry.mesh }) - 1;
+          delete geometry.mesh;
+        }
+      }
       (definition.extensions ??= {})[PHYSICS_BODIES] = payload;
       const bytes = property.getHullBytes();
       if (bytes) {
@@ -263,7 +318,14 @@ export function retainCollisionGeometry(document) {
       const path = `${role}.geometry.node`;
       const target = /** @type {import('@gltf-transform/core').Node | null} */ (property.getReference(path));
       const targetMesh = target?.getMesh();
-      if (!target || !targetMesh) continue;
+      // A referenced subtree, skin, morph or animated frame must keep its graph bindings.
+      if (!target || !targetMesh || target.listChildren().length || target.getSkin()
+        || targetMesh.listPrimitives().some(p => p.listTargets().length)) continue;
+      let animated = false;
+      for (let frame = /** @type {import('@gltf-transform/core').Node|null} */ (target); frame; frame = frame.getParentNode()) {
+        if (frame.listParents().some(p => p.propertyType === PropertyType.ANIMATION_CHANNEL)) animated = true;
+      }
+      if (animated) continue;
       if (rendered.has(target)) {
         property.setReference(path, collisionFrame(target).setMesh(collisionMesh(targetMesh)));
       } else if (renderedMeshes.has(targetMesh)) {
@@ -276,6 +338,7 @@ export function retainCollisionGeometry(document) {
     const mesh = simready.getMesh(path);
     if (mesh) simready.setMesh(path, collisionMesh(mesh));
   }
+  for (const mesh of simulationResources(document).collisionMeshes) renderedMeshes.delete(mesh);
   return renderedMeshes;
 }
 /** @param {import('@gltf-transform/core').Property} property */
@@ -297,6 +360,10 @@ export function simulationResources(document) {
 		const physics = node.getExtension(PHYSICS_BODIES);
 		if (!(physics instanceof PhysicsData)) continue;
 		simulationNodes.add(node);
+		for (const path of physics.referencePaths()) {
+			const target = physics.getReference(path);
+			if (target?.propertyType === PropertyType.NODE) simulationNodes.add(/** @type {import('@gltf-transform/core').Node} */ (target));
+		}
 		for (const role of ['collider', 'trigger']) {
 			const mesh = /** @type {import('@gltf-transform/core').Mesh|null} */ (physics.getReference(`${role}.geometry.mesh`));
 			if (mesh) collisionMeshes.add(mesh);

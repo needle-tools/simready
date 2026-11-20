@@ -217,7 +217,7 @@
           "collider": {
             "geometry": {
               "convexHull": false,
-              "mesh": 3
+              "node": 10
             }
           }
         }
@@ -225,6 +225,9 @@
     },
     {
       "name": "/Cabinet/Hinge frame 1"
+    },
+    {
+      "mesh": 3
     }
   ],
   "bufferViews": [
@@ -737,7 +740,6 @@
       "mappingIssues": []
     },
     "KHR_physics_rigid_bodies": {
-      "physicsMaterials": [],
       "physicsJoints": [
         {
           "limits": [

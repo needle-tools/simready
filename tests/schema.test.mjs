@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFile,readdir} from 'node:fs/promises';
+import {assertPhysicsSchemas} from './helpers/physics-schemas.mjs';
 import Ajv2020 from 'ajv/dist/2020.js';
 import {Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -30,6 +31,7 @@ function accessorValues(asset,index){
 
 test('the schemas compile strictly and validate the complete extension examples',()=>{
  for(const{name,asset}of examples){
+  assertPhysicsSchemas(asset);
   const data=asset.extensions.NEEDLE_simready;valid(data);
   assert.deepEqual(createSimreadyExtension(data),data,name+' agrees with the writer');
  }
