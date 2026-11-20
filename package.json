@@ -44,10 +44,6 @@
     "./usd": {
       "types": "./types/usd.d.ts",
       "import": "./src/usd.js"
-    },
-    "./gltf-transform": {
-      "types": "./types/gltf-transform/index.d.ts",
-      "import": "./src/gltf-transform/index.js"
     }
   },
   "scripts": {
@@ -56,11 +52,9 @@
     "test:packed-consumer": "node scripts/test-packed-consumer.mjs",
     "build:types": "tsc -p tsconfig.types.json",
     "prepack": "npm run build:types",
-    "test:types": "npm run build:types && node scripts/test-types.mjs",
-    "test:packed-gltf-transform": "node scripts/test-gltf-transform-consumer.mjs"
+    "test:types": "npm run build:types && node scripts/test-types.mjs"
   },
   "peerDependencies": {
-    "@gltf-transform/core": ">=4.2.1 <5",
     "closed-chain-ik": "0.0.7",
     "@needle-tools/engine": ">=6.0.0-alpha.7",
     "three": ">=0.160.0"
@@ -71,16 +65,10 @@
     },
     "@needle-tools/engine": {
       "optional": true
-    },
-    "@gltf-transform/core": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
-    "@gltf-transform/core": "^4.4.2",
-    "@gltf-transform/extensions": "^4.4.2",
-    "@gltf-transform/functions": "^4.4.2",
     "@needle-tools/engine": "^6.0.0-alpha.7",
     "@playwright/test": "^1.65.0",
     "@types/three": "^0.185.1",

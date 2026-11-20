@@ -10,7 +10,7 @@
 - Preserve compound trigger membership during node reordering and write mesh collider references in the Khronos glTF physics draft format.
 
 - Preserve authored full-revolution joint references through manipulation, simulation and the glTF runtime descriptor.
-- Preserve SimReady and standard physics references in glTF Transform workflows, with shared collider and simulation-frame resource queries.
+- Remove the glTF Transform adapter entry point from the runtime package.
 
 - Keep world-to-world joints in the runtime snapshot without creating a redundant constraint on the physics world's fixed body.
 

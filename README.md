@@ -345,24 +345,6 @@ Unsupported features reject by default; `allowPartial: true` returns diagnostics
 Simulation and motor targets do not modify authored data. Custom async visual
 bindings must check their abort signal after each await before accessing bodies.
 
-## glTF Transform
-
-Build tools can preserve simulation data through glTF Transform with the optional `@needle-tools/simready/gltf-transform` entry point. Install `@gltf-transform/core` alongside SimReady and register the adapters before reading an asset:
-
-```js
-import {NodeIO} from '@gltf-transform/core';
-import {registerSimreadyExtensions, retainCollisionGeometry, simulationResources} from '@needle-tools/simready/gltf-transform';
-
-const io = registerSimreadyExtensions(new NodeIO());
-const document = await io.read('assembly.glb');
-retainCollisionGeometry(document);
-const {collisionMeshes, simulationNodes} = simulationResources(document);
-```
-
-The adapters preserve `NEEDLE_simready`, `KHR_physics_rigid_bodies` and `KHR_implicit_shapes`. Node, mesh and binary hull references belong to the document graph, so cloning and resource reordering update their serialized indices. Removing a required reference fails export. Optional extension declarations remain optional.
-
-`retainCollisionGeometry` separates colliders from shared visual meshes before visual processing while preserving their complete transform chains. `simulationResources` identifies collider meshes and nodes whose identity or frame carries simulation meaning. Processing tools must preserve those resources; adapter registration alone does not make simplification, merging or frame-changing quantization safe. Recompute resource roles after changing the document.
-
 ## Development
 
 `npm run build:types` checks the JavaScript and generates package declarations.
