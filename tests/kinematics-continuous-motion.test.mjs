@@ -97,3 +97,40 @@ test('a revolute rest reference picks the equivalent turn inside limits, includi
         }
     }
 });
+
+test('point dragging a rotor past half a turn respects only authored stops', async () => {
+    for (const bounded of [false, true]) {
+        const snapshot = offsetRotorSnapshot(1);
+        snapshot.joints[0].limit = {enabled: bounded, lower: -180, upper: 180};
+        const mechanism = await createMechanism({snapshot, dragMode: 'point'});
+        try {
+            mechanism.play();
+            assert.ok(mechanism.beginDrag('/Rotor', {x: 1, y: 0, z: 0}));
+            for (let degrees = 5; degrees <= 450; degrees += 5) {
+                const angle = degrees * Math.PI / 180;
+                mechanism.moveDrag({x: Math.cos(angle), y: Math.sin(angle), z: 0});
+                const value = mechanism.getJointValue('/Motor');
+                if (!bounded || degrees <= 180) assert.ok(Math.abs(value - degrees) < .1, `${value} at ${degrees}°`);
+                else assert.ok(Math.abs(value) <= 180.001, `passed an authored stop: ${value}`);
+            }
+        } finally { mechanism.dispose(); }
+    }
+});
+
+test('joint overlays mark the current angle and only finite stops', async () => {
+    const {Group} = await import('three');
+    const {createJointHelpers} = await import('../src/three.js');
+    for (const [lower, upper, markers] of [[null, null, 1], [270, null, 2], [null, -270, 2], [-180, 180, 3]]) {
+        const snapshot = offsetRotorSnapshot(1);
+        snapshot.joints[0].limit = {enabled: true, lower, upper};
+        const mechanism = await createMechanism({snapshot});
+        mechanism.play();
+        const helpers = createJointHelpers({...mechanism, root: new Group()});
+        try {
+            assert.equal(helpers.objects[0].children[0].geometry.attributes.position.count, markers);
+        } finally {
+            helpers.dispose();
+            mechanism.dispose();
+        }
+    }
+});

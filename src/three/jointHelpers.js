@@ -49,13 +49,17 @@ export function createJointHelpers(mechanism,{visible=()=>true,selected=()=>fals
     dots.push(0,0,0);
     for(const direction of[axis,u,v])edge(direction.clone().multiplyScalar(-radius*.2),direction.clone().multiplyScalar(radius*.2));
    }else if(record.angular){
-    const lower=Number.isFinite(record.lower)?record.lower:-180,upper=Number.isFinite(record.upper)?record.upper:180;
+    // Show one ring for continuous and multi-turn travel. Mark only physical stops.
+    const start=Number.isFinite(record.lower)?record.lower:Number.isFinite(record.upper)?record.upper-360:0;
+    const span=Math.min(360,record.upper-record.lower);
     /** @param {number} a */
     const at=a=>u.clone().multiplyScalar(Math.cos(a*Math.PI/180)*radius).addScaledVector(v,Math.sin(a*Math.PI/180)*radius);
-    for(let i=0;i<48;i++)edge(at(lower+(upper-lower)*i/48),at(lower+(upper-lower)*(i+1)/48));
-    edge(new Vector3(),at(lower));edge(new Vector3(),at(upper));
+    for(let i=0;i<48;i++)edge(at(start+span*i/48),at(start+span*(i+1)/48));
+    for(const stop of [record.lower,record.upper])if(Number.isFinite(stop)){
+     const p=at(stop);edge(new Vector3(),p);dots.push(...p);
+    }
     const value=mechanism.getJointValue(record.data.path);if(value===null)continue;edge(new Vector3(),at(value));
-    dots.push(...at(lower),...at(upper),...at(value));
+    dots.push(...at(value));
     edge(axis.clone().multiplyScalar(-radius*.5),axis.clone().multiplyScalar(radius*.5));
    }else{
     const lower=Number.isFinite(record.lower)?record.lower:-radius,upper=Number.isFinite(record.upper)?record.upper:radius;
