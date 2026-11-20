@@ -77,6 +77,13 @@ export class ImplicitShapesExtension extends Extension {
     return this;
   }
 }
+/** @param {Record<string, any>} geometry @param {string} role */
+function validateGeometry(geometry, role) {
+  if (geometry.mesh !== undefined || (geometry.node !== undefined) === (geometry.shape !== undefined)) {
+    throw new Error(`Invalid ${role}.geometry: expected exactly one node or shape reference.`);
+  }
+}
+
 /** @param {Record<string, any>} payload */
 function compoundMembers(payload) {
   const members = payload.trigger?.nodes;
@@ -103,7 +110,6 @@ export class PhysicsBodiesExtension extends Extension {
     const root = this.document.getRoot(), json = context.jsonDoc.json;
     /** @type {Map<number, PhysicsHullData>} */
     const hullViews = new Map();
-    const legacyNodes = new Map();
     const rootData = json.extensions?.[PHYSICS_BODIES];
     if (rootData) root.setExtension(PHYSICS_BODIES, new PhysicsData(this.document.getGraph()).setPayload(rootData));
     for (const [index, definition] of (json.nodes ?? []).entries()) {
@@ -114,22 +120,8 @@ export class PhysicsBodiesExtension extends Extension {
       for (const role of ['collider', 'trigger']) {
         const geometry = property.getPayload()[role]?.geometry;
         if (!geometry) continue;
-        if (['shape', 'node', 'mesh'].filter(key => geometry[key] !== undefined).length !== 1) {
-          throw new Error(`Invalid ${role}.geometry: expected exactly one geometry source.`);
-        }
-        if (geometry.mesh !== undefined) {
-          // Older exports stored a mesh index directly. Keep it outside the render scene.
-          const mesh = Number.isInteger(geometry.mesh) && context.meshes[geometry.mesh];
-          if (!mesh) throw new Error(`Invalid ${role}.geometry.mesh reference.`);
-          let target = legacyNodes.get(mesh);
-          if (!target) {
-            target = this.document.createNode().setMesh(mesh);
-            legacyNodes.set(mesh, target);
-          }
-          delete geometry.mesh;
-          geometry.node = 0; // The graph reference supplies the serialized index.
-          property.setReference(`${role}.geometry.node`, target);
-        } else if (geometry.node !== undefined) {
+        validateGeometry(geometry, role);
+        if (geometry.node !== undefined) {
           const target = Number.isInteger(geometry.node) && context.nodes[geometry.node];
           if (!target) throw new Error(`Invalid ${role}.geometry.node reference.`);
           property.setReference(`${role}.geometry.node`, target);
@@ -200,9 +192,7 @@ export class PhysicsBodiesExtension extends Extension {
       for (const role of ['collider', 'trigger']) {
         const geometry = payload[role]?.geometry;
         if (!geometry) continue;
-        if (geometry.mesh !== undefined || (geometry.node !== undefined) === (geometry.shape !== undefined)) {
-          throw new Error(`Invalid ${role}.geometry: expected exactly one node or shape reference.`);
-        }
+        validateGeometry(geometry, role);
         if (geometry.node !== undefined) paths.push(`${role}.geometry.node`);
       }
       if (payload.joint?.connectedNode !== undefined) paths.push('joint.connectedNode');

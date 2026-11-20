@@ -29,7 +29,7 @@ async function fixture(){
 		[IMPLICIT_SHAPES]:{shapes:[{type:'box',box:{size:[1,2,3]}}]},
 	};
 	input.json.extensions[NEEDLE_SIMREADY].extras={fixture:'hinge'};
-	input.json.nodes[node('Body')].extensions={[PHYSICS_BODIES]:{motion:{mass:3},collider:{geometry:{mesh:0},physicsMaterial:0},trigger:{geometry:{shape:0}},joint:{connectedNode:node('Tip'),joint:0,enableCollision:false}}};
+	input.json.nodes[node('Body')].extensions={[PHYSICS_BODIES]:{motion:{mass:3},collider:{geometry:{node:input.json.nodes.push({mesh:0})-1},physicsMaterial:0},trigger:{geometry:{shape:0}},joint:{connectedNode:node('Tip'),joint:0,enableCollision:false}}};
 	input.json.nodes[node('Tip')].extensions={[PHYSICS_BODIES]:{motion:{mass:1},collider:{geometry:{node:node('Body')}}}};
 	const accessor=input.json.accessors[input.json.meshes[0].primitives[0].attributes.POSITION];
 	input.json.nodes[node('Body')].extras={collisionHulls:{bufferView:accessor.bufferView,byteOffset:accessor.byteOffset??0,counts:[3],materials:[0]}};
@@ -145,8 +145,10 @@ test('a visible collision node with its own mesh and child mesh keeps both colli
 	assert.ok(json.meshes[json.nodes[json.nodes[ref].children[0]].mesh]);
 });
 
-test('freshly authored physics must attach collider geometry by node or shape', async () => {
-	const {io, document} = await fixture();
+test('reading and writing collider geometry requires a node or shape', async () => {
+	const {io, input, document} = await fixture();
+	input.json.nodes.find(node => node.name === 'Body').extensions[PHYSICS_BODIES].collider.geometry = {mesh: 0};
+	await assert.rejects(io.readJSON(input), /collider.geometry: expected exactly one node or shape/);
 	const body = document.getRoot().listNodes().find(node => node.getName() === 'Body');
 	const physics = body.getExtension(PHYSICS_BODIES);
 	physics.setPayload({collider: {geometry: {mesh: 0}}});
