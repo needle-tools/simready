@@ -174,7 +174,7 @@ export type SimreadySemanticLabels = {
     labels: string[];
 };
 export type SimreadyRuntimeExtension = {
-    version: 3;
+    version: 1;
     stageNode: number;
     snapshot: WireSnapshot;
     bindings: SimreadyBinding[];

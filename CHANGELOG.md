@@ -1,11 +1,8 @@
 # Changelog
 
-## Runtime interchange correction
-
-- Write version 3 runtime physics and semantic labels without source USD property bags or numeric authoring archives.
-- Use one runtime descriptor for reading and writing, with shared schema validation.
-
 ## Unreleased
+
+- Share schema validation between the reader and writer for runtime physics and semantic labels.
 
 - Preserve compound trigger membership during node reordering and write mesh collider references in the Khronos glTF physics draft format.
 

@@ -10,7 +10,7 @@
   ],
   "properties": {
     "version": {
-      "const": 3
+      "const": 1
     },
     "stageNode": {
       "$ref": "common.schema.json#/$defs/index",

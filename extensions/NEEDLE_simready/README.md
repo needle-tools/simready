@@ -55,14 +55,14 @@ properties to nodes, materials or meshes.
 
 | Property        | Type         | Required | Meaning                                                                              |
 | --------------- | ------------ | -------- | ------------------------------------------------------------------------------------ |
-| `version`       | integer      | Yes      | `3` for runtime interchange.                                                      |
+| `version`       | integer      | Yes      | `1` for runtime interchange.                                                      |
 | `stageNode`     | integer      | Yes      | Index into glTF `nodes`, identifying the asset-local reference root.                          |
 | `snapshot`      | object       | Yes      | Physics data in glTF coordinates and SI units.                               |
 | `bindings`      | object array | Yes      | Connections between glTF nodes and source identities.                                |
 | `semantics` | object array | Yes | Defined `{path, taxonomy, labels}` records attached to exported binding identities. |
 | `mappingIssues` | object array | No       | Descriptions of data without an exact companion-extension projection. Default: `[]`. |
 
-Version 3 members follow the closed runtime schema. Standard glTF `extensions` and `extras` remain available for explicitly defined application contracts.
+The runtime schema defines the allowed members. Standard glTF `extensions` and `extras` remain available for explicitly defined application contracts.
 
 Render geometry and textures use the ordinary glTF representation.
 
@@ -250,7 +250,7 @@ An importer MUST NOT infer ownership solely from the visual node's parent or nam
 
 ## Runtime semantics
 
-Version 3 stores `semantics` as `{path, taxonomy, labels}` records. `path` MUST
+The `semantics` array contains `{path, taxonomy, labels}` records. `path` MUST
 identify an exported binding. `taxonomy` is a non-empty classification namespace;
 `labels` is a non-empty array of non-empty strings. A consumer attaches these labels
 to the matching exported objects. Labels do not execute physics or reconstruct USD.

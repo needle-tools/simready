@@ -9,7 +9,7 @@ const asset=payload=>({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:
 const load=payload=>registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(asset(payload)),'');
 test('runtime export has a closed vocabulary and drops source property bags',async()=>{
  const data=createSimreadyRuntimeExtension(options());
- assert.equal(data.version,3);
+ assert.equal(data.version,1);
  assert.equal(data.snapshot.bodies[0].physx,undefined);assert.equal(data.snapshot.bodies[0].attributes,undefined);assert.equal(data.bindings[0].instance,undefined);
  assert.equal(data.snapshot.bodies[0].mass,2);assert.equal(data.snapshot.bodies[0].gravityScale,0);assert.equal(data.snapshot.bodies[0].continuousCollision,false);
  const loaded=await load(data),runtime=getSimreadyRuntime(loaded);
@@ -17,7 +17,7 @@ test('runtime export has a closed vocabulary and drops source property bags',asy
  const mechanism=await runtime.createMechanism();try{assert.equal(mechanism.bodies.size,1);}finally{mechanism.dispose();}
 });
 test('runtime import validates the closed descriptor fields',async()=>{
- for(const edit of [p=>p.unknownField={},p=>p.snapshot.unknownField=[],p=>p.snapshot.bodies[0].physxProperties={},p=>p.bindings[0].instance={source:'USD'},p=>p.semantics[0].attributes=[],p=>p.semantics[0].path='/Missing']){
+ for(const edit of [p=>p.version=3,p=>p.unknownField={},p=>p.snapshot.unknownField=[],p=>p.snapshot.bodies[0].physxProperties={},p=>p.bindings[0].instance={source:'USD'},p=>p.semantics[0].attributes=[],p=>p.semantics[0].path='/Missing']){
   const data=createSimreadyRuntimeExtension(options());edit(data);await assert.rejects(load(data),/Invalid/);
  }
 });

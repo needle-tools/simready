@@ -53,7 +53,7 @@
 /** @typedef {Omit<GltfPhysicsSnapshot,'shapes'>&{shapes:WireShape[]}} WireSnapshot */
 /** Semantic labels attach to an exported binding identity, not a USD prim description.
  * @typedef {{path:string,taxonomy:string,labels:string[]}} SimreadySemanticLabels */
-/** @typedef {{version:3,stageNode:number,snapshot:WireSnapshot,bindings:SimreadyBinding[],semantics:SimreadySemanticLabels[],mappingIssues:PhysicsIssue[]}} SimreadyRuntimeExtension */
+/** @typedef {{version:1,stageNode:number,snapshot:WireSnapshot,bindings:SimreadyBinding[],semantics:SimreadySemanticLabels[],mappingIssues:PhysicsIssue[]}} SimreadyRuntimeExtension */
 /** @typedef {SimreadyRuntimeExtension} SimreadyExtension */
 
 import {isSnapshot} from './validation.js';
@@ -121,7 +121,7 @@ export function getSnapshotIssues(snapshot){
  * @returns {SimreadyRuntimeExtension}
  */
 export function createSimreadyRuntimeExtension({snapshot,stageNode,bindings,semantics=[],mappingIssues=[]}){
- const payload={version:/** @type {const} */(3),stageNode,snapshot:runtimeSnapshot(snapshot),bindings:bindings.map(({node,path,body})=>({node,path,...(body?{body}:{})})),semantics,mappingIssues};
+ const payload={version:/** @type {const} */(1),stageNode,snapshot:runtimeSnapshot(snapshot),bindings:bindings.map(({node,path,body})=>({node,path,...(body?{body}:{})})),semantics,mappingIssues};
  validateSimreadyExtension(payload);
  return /** @type {SimreadyRuntimeExtension} */(copyJson(payload));
 }

@@ -38,7 +38,7 @@ export function isRuntimeSemantics(value){
 
 /** @param {unknown} value @returns {value is import('../index.js').SimreadyRuntimeExtension} */
 export function isRuntimeExtension(value){
- if(!isRecord(value)||value.version!==3||!Number.isInteger(value.stageNode)||Number(value.stageNode)<0
+ if(!isRecord(value)||value.version!==1||!Number.isInteger(value.stageNode)||Number(value.stageNode)<0
   ||Object.keys(value).some(key=>!['version','stageNode','snapshot','bindings','semantics','mappingIssues','extensions','extras'].includes(key))
   ||!isWireSnapshot(value.snapshot)||!isRuntimeSnapshot(value.snapshot)
   ||!Array.isArray(value.bindings)||!value.bindings.every(binding=>isBinding(binding)&&Object.keys(binding).every(key=>['node','path','body'].includes(key)))
