@@ -27,7 +27,7 @@ export function simulationResources(document: import("@gltf-transform/core").Doc
 export const PHYSICS_BODIES: "KHR_physics_rigid_bodies";
 export const IMPLICIT_SHAPES: "KHR_implicit_shapes";
 /** @typedef {import('@gltf-transform/core').IProperty & {
- * payload: Record<string, any>, references: import('@gltf-transform/core').RefMap<import('@gltf-transform/core').Node | import('@gltf-transform/core').Mesh>, hullData: PhysicsHullData,
+ * payload: Record<string, any>, references: import('@gltf-transform/core').RefMap<import('@gltf-transform/core').Node>, hullData: PhysicsHullData,
  * }} IPhysicsData */
 /** Index-bearing fields are graph edges, so cloning and reordering cannot
  * leave physics pointing at a different render node or collision mesh.
@@ -41,10 +41,10 @@ export class PhysicsData extends ExtensionProperty<IPhysicsData> {
     getPayload(): Record<string, any>;
     /** @param {Record<string, any>} value */
     setPayload(value: Record<string, any>): this;
-    /** @param {string} path @param {import('@gltf-transform/core').Node | import('@gltf-transform/core').Mesh} value */
-    setReference(path: string, value: import("@gltf-transform/core").Node | import("@gltf-transform/core").Mesh): this;
+    /** @param {string} path @param {import('@gltf-transform/core').Node} value */
+    setReference(path: string, value: import("@gltf-transform/core").Node): this;
     /** @param {string} path */
-    getReference(path: string): import("@gltf-transform/core").Node | import("@gltf-transform/core").Mesh | null;
+    getReference(path: string): import("@gltf-transform/core").Node | null;
     referencePaths(): string[];
     getHullBytes(): Uint8Array<ArrayBufferLike> | null;
     /** @param {PhysicsHullData} data */
@@ -88,7 +88,7 @@ export const simulationExtensions: readonly string[];
 export const SIMREADY_EXTENSIONS: (typeof NeedleSimreadyExtension)[];
 export type IPhysicsData = import("@gltf-transform/core").IProperty & {
     payload: Record<string, any>;
-    references: import("@gltf-transform/core").RefMap<import("@gltf-transform/core").Node | import("@gltf-transform/core").Mesh>;
+    references: import("@gltf-transform/core").RefMap<import("@gltf-transform/core").Node>;
     hullData: PhysicsHullData;
 };
 import { ExtensionProperty } from '@gltf-transform/core';

@@ -144,3 +144,11 @@ test('a visible collision node with its own mesh and child mesh keeps both colli
 	assert.ok(json.meshes[json.nodes[ref].mesh]);
 	assert.ok(json.meshes[json.nodes[json.nodes[ref].children[0]].mesh]);
 });
+
+test('freshly authored physics must attach collider geometry by node or shape', async () => {
+	const {io, document} = await fixture();
+	const body = document.getRoot().listNodes().find(node => node.getName() === 'Body');
+	const physics = body.getExtension(PHYSICS_BODIES);
+	physics.setPayload({collider: {geometry: {mesh: 0}}});
+	await assert.rejects(io.writeJSON(document), /collider.geometry: expected exactly one node or shape/);
+});
