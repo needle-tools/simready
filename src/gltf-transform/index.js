@@ -185,8 +185,18 @@ export function registerSimreadyExtensions(io) {
 export function hasPhysics(node) {
   return Boolean(node.getExtension(PHYSICS_BODIES)) || Array.isArray(node.getExtras().joints) || typeof node.getExtras().mass === 'number';
 }
+export const simulationExtensions = Object.freeze([NEEDLE_SIMREADY, PHYSICS_BODIES, IMPLICIT_SHAPES]);
+/** @param {import('@gltf-transform/core').GLTF.IGLTF} json */
+export function hasSimreadyInput(json) {
+  return Boolean(json.extensionsUsed?.some(name => simulationExtensions.includes(name))
+    || json.nodes?.some(node => Array.isArray(node.extras?.joints) || typeof node.extras?.mass === 'number'));
+}
 /** @param {import('@gltf-transform/core').Document} document */
-export function hasSimready(document) { return Boolean(document.getRoot().getExtension(NEEDLE_SIMREADY))||document.getRoot().listNodes().some(hasPhysics); }
+export function hasSimready(document) {
+  const root = document.getRoot();
+  return root.listExtensionsUsed().some(extension => simulationExtensions.includes(extension.extensionName))
+    || root.listNodes().some(hasPhysics);
+}
 /** Collision-only nodes must stay serializable without becoming bake sources. */
 /** @param {import('@gltf-transform/core').Document} document */
 export function renderNodes(document) {
@@ -197,10 +207,16 @@ export function renderNodes(document) {
 /** Snapshot collision geometry before visual optimization can replace it.
  * Detached nodes are referenced by the draft's geometry.node dialect; the
  * mesh dialect uses a direct graph edge. Both keep the authored collider.
+ * Returns the scene's visual meshes for subsequent processing.
  * @param {import('@gltf-transform/core').Document} document */
 export function retainCollisionGeometry(document) {
   const rendered = new Set(renderNodes(document));
-  const renderedMeshes = new Set([...rendered].map(node => node.getMesh()).filter(Boolean));
+  /** @type {Set<import('@gltf-transform/core').Mesh>} */
+  const renderedMeshes = new Set();
+  for (const node of rendered) {
+    const mesh = node.getMesh();
+    if (mesh) renderedMeshes.add(mesh);
+  }
   /** @type {Map<import('@gltf-transform/core').Mesh, import('@gltf-transform/core').Mesh>} */
   const meshes = new Map();
   /** Physics uses positions and triangle connectivity; retaining visual UVs,
@@ -237,7 +253,7 @@ export function retainCollisionGeometry(document) {
     if (parent) collisionFrame(parent).addChild(frame);
     return frame;
   };
-  for (const node of rendered) {
+  for (const node of document.getRoot().listNodes()) {
     const property = node.getExtension(PHYSICS_BODIES);
     if (!(property instanceof PhysicsData)) continue;
     for (const role of ['collider', 'trigger']) {
@@ -246,9 +262,13 @@ export function retainCollisionGeometry(document) {
       if (mesh) property.setReference(meshPath, collisionMesh(mesh));
       const path = `${role}.geometry.node`;
       const target = /** @type {import('@gltf-transform/core').Node | null} */ (property.getReference(path));
-      if (!target?.getMesh() || !rendered.has(target)) continue;
-      const snapshot = collisionFrame(target).setMesh(collisionMesh(/** @type {import('@gltf-transform/core').Mesh} */ (target.getMesh())));
-      property.setReference(path, snapshot);
+      const targetMesh = target?.getMesh();
+      if (!target || !targetMesh) continue;
+      if (rendered.has(target)) {
+        property.setReference(path, collisionFrame(target).setMesh(collisionMesh(targetMesh)));
+      } else if (renderedMeshes.has(targetMesh)) {
+        target.setMesh(collisionMesh(targetMesh));
+      }
     }
   }
   const simready = document.getRoot().getExtension(NEEDLE_SIMREADY);
@@ -256,10 +276,10 @@ export function retainCollisionGeometry(document) {
     const mesh = simready.getMesh(path);
     if (mesh) simready.setMesh(path, collisionMesh(mesh));
   }
+  return renderedMeshes;
 }
 /** @param {import('@gltf-transform/core').Property} property */
 export function physicsOwns(property) { return property.listParents().some(parent => parent instanceof PhysicsData||parent instanceof SimreadyData); }
-
 
 export { NeedleSimreadyExtension, SimreadyData, NEEDLE_SIMREADY };
 export const SIMREADY_EXTENSIONS = [PhysicsBodiesExtension, ImplicitShapesExtension, NeedleSimreadyExtension];

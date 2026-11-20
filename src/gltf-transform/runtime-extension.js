@@ -1,6 +1,6 @@
 // @ts-check
 import {Extension,ExtensionProperty,PropertyType,RefMap} from '@gltf-transform/core';
-import {createSimreadyRuntimeExtension,validateSimreadyExtension} from '../index.js';
+import {validateSimreadyExtension} from '../index.js';
 export const NEEDLE_SIMREADY='NEEDLE_simready';
 /** @typedef {import('@gltf-transform/core').IProperty & {payload:Record<string,any>, references:import('@gltf-transform/core').RefMap<import('@gltf-transform/core').Node>,meshes:import('@gltf-transform/core').RefMap<import('@gltf-transform/core').Mesh>}} SimreadyProperties */
 /** @extends {ExtensionProperty<SimreadyProperties>} */
@@ -58,7 +58,7 @@ export class NeedleSimreadyExtension extends Extension{
    if(index===undefined||index===null)throw new Error('SimReady collision mesh was removed during optimization.');
    const keys=path.split('.');let target=payload;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)??'']=index;
   }
-  (context.jsonDoc.json.extensions??={})[NEEDLE_SIMREADY]=createSimreadyRuntimeExtension({snapshot:payload.snapshot,stageNode:payload.stageNode,bindings:payload.bindings,semantics:payload.semantics,mappingIssues:payload.mappingIssues});return this;
+  (context.jsonDoc.json.extensions??={})[NEEDLE_SIMREADY]=validateSimreadyExtension(payload);return this;
  }
 }
 /** @param {Record<string,any>} payload @returns {string[]} */

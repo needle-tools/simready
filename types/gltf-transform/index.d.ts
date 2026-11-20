@@ -2,6 +2,8 @@
 export function registerSimreadyExtensions(io: import("@gltf-transform/core").PlatformIO): import("@gltf-transform/core").PlatformIO;
 /** @param {import('@gltf-transform/core').Node} node */
 export function hasPhysics(node: import("@gltf-transform/core").Node): boolean;
+/** @param {import('@gltf-transform/core').GLTF.IGLTF} json */
+export function hasSimreadyInput(json: import("@gltf-transform/core").GLTF.IGLTF): boolean;
 /** @param {import('@gltf-transform/core').Document} document */
 export function hasSimready(document: import("@gltf-transform/core").Document): boolean;
 /** Collision-only nodes must stay serializable without becoming bake sources. */
@@ -10,8 +12,9 @@ export function renderNodes(document: import("@gltf-transform/core").Document): 
 /** Snapshot collision geometry before visual optimization can replace it.
  * Detached nodes are referenced by the draft's geometry.node dialect; the
  * mesh dialect uses a direct graph edge. Both keep the authored collider.
+ * Returns the scene's visual meshes for subsequent processing.
  * @param {import('@gltf-transform/core').Document} document */
-export function retainCollisionGeometry(document: import("@gltf-transform/core").Document): void;
+export function retainCollisionGeometry(document: import("@gltf-transform/core").Document): Set<import("@gltf-transform/core").Mesh>;
 /** @param {import('@gltf-transform/core').Property} property */
 export function physicsOwns(property: import("@gltf-transform/core").Property): boolean;
 /** Graph-owned resources whose coordinates or identity carry simulation meaning.
@@ -81,6 +84,7 @@ export class PhysicsBodiesExtension extends Extension {
     /** @param {import('@gltf-transform/core').WriterContext} context */
     write(context: import("@gltf-transform/core").WriterContext): this;
 }
+export const simulationExtensions: readonly string[];
 export const SIMREADY_EXTENSIONS: (typeof NeedleSimreadyExtension)[];
 export type IPhysicsData = import("@gltf-transform/core").IProperty & {
     payload: Record<string, any>;

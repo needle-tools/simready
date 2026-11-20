@@ -27,6 +27,7 @@ async function fixture(){
 		[PHYSICS_BODIES]:{physicsMaterials:[{staticFriction:.6,dynamicFriction:.4,restitution:.1}],physicsJoints:[{limits:[{angularAxes:[1],min:0,max:Math.PI/2}]}]},
 		[IMPLICIT_SHAPES]:{shapes:[{type:'box',box:{size:[1,2,3]}}]},
 	};
+	input.json.extensions[NEEDLE_SIMREADY].extras={fixture:'hinge'};
 	input.json.nodes[node('Body')].extensions={[PHYSICS_BODIES]:{motion:{mass:3},collider:{geometry:{mesh:0},physicsMaterial:0},trigger:{geometry:{shape:0}},joint:{connectedNode:node('Tip'),joint:0,enableCollision:false}}};
 	input.json.nodes[node('Tip')].extensions={[PHYSICS_BODIES]:{motion:{mass:1},collider:{geometry:{node:node('Body')}}}};
 	const accessor=input.json.accessors[input.json.meshes[0].primitives[0].attributes.POSITION];
@@ -54,6 +55,7 @@ test('shared adapters retain simulation references, hull bytes and optional decl
 	assert.equal(restoredPhysics.getReference('joint.connectedNode').getName(),'Tip');
 	assert.equal(restoredPhysics.getReference('collider.geometry.mesh'),restored.getMesh('snapshot.shapes.0.mesh'));
 	assert.deepEqual(restoredPhysics.getHullBytes(),hull);
+	assert.deepEqual(restored.getPayload().extras,{fixture:'hinge'});
 	assert.deepEqual(restored.getPayload().semantics,before.getPayload().semantics);
 	assert.deepEqual(restored.getMesh('snapshot.shapes.0.mesh').listPrimitives()[0].getAttribute('POSITION').getArray(),collision.listPrimitives()[0].getAttribute('POSITION').getArray());
 	const json=(await io.writeJSON(after)).json;
@@ -83,4 +85,18 @@ test('shared adapters reject invalid input references and required targets delet
 	await assert.rejects(io.readJSON(input),/connectedNode/);
 	runtime(document).getReference('bindings.1.node').dispose();
 	await assert.rejects(io.writeBinary(document),/removed/);
+});
+
+test('keeps detached collider geometry separate from selected visual meshes',async()=>{
+	const {document}=await fixture();
+	const body=document.getRoot().listNodes().find(node=>node.getName()==='Body');
+	const visual=body.getMesh();
+	const detached=document.createNode('Collider').setMesh(visual);
+	const physics=body.getExtension(PHYSICS_BODIES);
+	physics.setReference('trigger.geometry.node',detached);
+	const selected=retainCollisionGeometry(document);
+	assert.ok(selected.has(visual));
+	assert.ok(!selected.has(detached.getMesh()));
+	assert.notEqual(detached.getMesh(),visual);
+	assert.equal(detached.getMesh().listPrimitives()[0].getAttribute('POSITION'),visual.listPrimitives()[0].getAttribute('POSITION'));
 });
