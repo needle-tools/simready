@@ -22,6 +22,7 @@ import {Plane, Raycaster, Vector2, Vector3} from 'three';
 export function bindPointerDrag({element, camera, controller, root, pick, onDraggingChange, onMove}) {
     const ray = new Raycaster(), ndc = new Vector2(), plane = new Plane(), point = new Vector3();
     const doc = element.ownerDocument, win = doc.defaultView;
+    const capture = {capture: true};
     const getController = () => typeof controller === 'function' ? controller() : controller;
     const getRoot = () => typeof root === 'function' ? root() : root;
     /** @type {{pointerId:number,controller:C,root:Object3D|null|undefined,cursor:string}|null} */
@@ -66,9 +67,9 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
         const previous = drag;
         if (!previous) return;
         drag = null;
-        doc.removeEventListener('pointermove', move, true);
-        doc.removeEventListener('pointerup', up, true);
-        doc.removeEventListener('pointercancel', up, true);
+        doc.removeEventListener('pointermove', move, capture);
+        doc.removeEventListener('pointerup', up, capture);
+        doc.removeEventListener('pointercancel', up, capture);
         win?.removeEventListener('blur', cancel);
         try {
             if (element.hasPointerCapture(previous.pointerId)) element.releasePointerCapture(previous.pointerId);
@@ -94,9 +95,9 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
         if (!target.beginDrag(hit.path, point)) return;
         drag = {pointerId:event.pointerId, controller:target, root:frame, cursor:element.style.cursor};
         plane.setFromNormalAndCoplanarPoint(view.getWorldDirection(point), hit.point);
-        doc.addEventListener('pointermove', move, true);
-        doc.addEventListener('pointerup', up, true);
-        doc.addEventListener('pointercancel', up, true);
+        doc.addEventListener('pointermove', move, capture);
+        doc.addEventListener('pointerup', up, capture);
+        doc.addEventListener('pointercancel', up, capture);
         win?.addEventListener('blur', cancel);
         consume(event);
         // A synthetic pointer or one released by the browser may be uncapturable.
@@ -127,13 +128,13 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
     /** @param {PointerEvent} event */
     function lostCapture(event) { if (drag?.pointerId === event.pointerId) cancel(); }
 
-    element.addEventListener('pointerdown', down, true);
+    element.addEventListener('pointerdown', down, capture);
     element.addEventListener('lostpointercapture', lostCapture);
     return {
         get dragging() { return !!drag; },
         cancel,
         dispose() {
-            element.removeEventListener('pointerdown', down, true);
+            element.removeEventListener('pointerdown', down, capture);
             element.removeEventListener('lostpointercapture', lostCapture);
             cancel();
         },
