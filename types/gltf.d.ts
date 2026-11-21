@@ -51,6 +51,7 @@ export type CreateBoundSimulation = {
 export type SimreadyParser = {
     json: {
         extensions?: Record<string, unknown>;
+        extensionsRequired?: string[];
         nodes?: unknown[];
         meshes?: {
             primitives: {

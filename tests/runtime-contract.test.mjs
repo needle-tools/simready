@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createSimreadyRuntimeExtension} from '../src/index.js';
-import {registerSimreadyLoader,getSimreadyRuntime,toGltfPhysicsSnapshot,fromGltfPhysicsSnapshot} from '../src/gltf.js';
+import {NeedleSimreadyLoaderPlugin,registerSimreadyLoader,getSimreadyRuntime,toGltfPhysicsSnapshot,fromGltfPhysicsSnapshot} from '../src/gltf.js';
 const source=()=>({bodies:[{path:'/Body',position:[0,1,0],rotation:[0,0,0,1],mass:2,gravityScale:0,continuousCollision:false,physx:{vendor:'do not archive'},attributes:[{name:'xformOp:transform',value:[]}]}],shapes:[],joints:[],groups:[],materials:[],scenes:[],unsupported:[]});
 const options=()=>({snapshot:source(),stageNode:0,bindings:[{node:1,path:'/Body',instance:{rawUsd:'forbidden'}}],semantics:[{path:'/Body',taxonomy:'class',labels:['cabinet']}]});
 const asset=payload=>({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{children:[1]},{}],extensionsUsed:['NEEDLE_simready'],extensionsRequired:['NEEDLE_simready'],extensions:{NEEDLE_simready:payload}});
@@ -36,4 +36,36 @@ test('authored full-turn references survive the closed glTF runtime contract',as
  const runtime=getSimreadyRuntime(await load(data)),mechanism=await runtime.createMechanism();
  try{assert.ok(Math.abs(mechanism.getJointValue('/Turn')-720)<1e-3);}
  finally{mechanism.dispose();}
+});
+
+test('optional incompatible metadata leaves the rendered scene usable', async t=>{
+ const warning=t.mock.method(console,'warn',()=>{});
+ const input=asset({version:99});
+ delete input.extensionsRequired;
+ input.nodes[1].name='Door';
+ const loader=registerSimreadyLoader(new GLTFLoader());
+ const result=await loader.parseAsync(JSON.stringify(input),'');
+ assert.ok(result.scene.getObjectByName('Door'));
+ assert.equal(getSimreadyRuntime(result),null);
+ assert.match(warning.mock.calls[0].arguments[0],/optional.*version 99/i);
+ input.extensionsRequired=['NEEDLE_simready'];
+ await assert.rejects(loader.parseAsync(JSON.stringify(input),''),/Invalid SimReady runtime payload/);
+});
+
+test('an invalid optional binding leaves no partially applied runtime identities', async t=>{
+ t.mock.method(console,'warn',()=>{});
+ const input=asset(createSimreadyRuntimeExtension(options()));
+ delete input.extensionsRequired;
+ input.extensions.NEEDLE_simready.bindings.push({node:99,path:'/Absent'});
+ const result=await registerSimreadyLoader(new GLTFLoader()).parseAsync(JSON.stringify(input),'');
+ assert.equal(getSimreadyRuntime(result),null);
+ assert.equal(result.scene.children[0].children[0].userData.usdSourcePath,undefined);
+});
+
+test('optional metadata propagates failures loading a valid dependency', async ()=>{
+ const json=asset(createSimreadyRuntimeExtension(options()));
+ delete json.extensionsRequired;
+ const failure=new Error('Could not read node dependency');
+ const plugin=new NeedleSimreadyLoaderPlugin({json,getDependency:async()=>{throw failure;}});
+ await assert.rejects(plugin.afterRoot({}),error=>error===failure);
 });

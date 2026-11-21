@@ -312,7 +312,9 @@ In addition to JSON Schema validation, a conforming reader checks that:
    reports its unsupported features and adaptations.
 
 Unknown versions and malformed references MUST be rejected before constructing
-a controller. Reading metadata MUST NOT download or initialize a simulator.
+a controller. When the extension is optional, consumers can still render the
+base scene. When it is listed in `extensionsRequired`, incompatible metadata
+prevents loading the asset. Reading metadata MUST NOT download or initialize a simulator.
 A consumer MAY offer explicit partial operation with diagnostics, but MUST NOT
 present it as complete support for the omitted behavior.
 

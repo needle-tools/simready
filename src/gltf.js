@@ -18,7 +18,7 @@
  * <A extends {dispose():void}>(options:{world:import('./rapier.js').SimulationHost<A>}&Omit<import('./rapier.js').HostAssetOptions,'snapshot'|'bindVisuals'>):
  * Promise<A&{root:Object3D}>;
  * }} CreateBoundSimulation */
-/** @typedef {{json:{extensions?:Record<string,unknown>,nodes?:unknown[],meshes?:{primitives:{mode?:number}[]}[]},
+/** @typedef {{json:{extensions?:Record<string,unknown>,extensionsRequired?:string[],nodes?:unknown[],meshes?:{primitives:{mode?:number}[]}[]},
  * getDependency(type:string,index:number):Promise<unknown>}} SimreadyParser */
 /** @typedef {{scene:Object3D,userData?:Record<string,unknown>}} SimreadyLoadResult */
 /** @typedef {{register(factory:(parser:SimreadyParser)=>NeedleSimreadyLoaderPlugin):unknown}} SimreadyLoader */
@@ -39,66 +39,88 @@ const isCollisionPrimitive=value=>('isMesh' in value&&value.isMesh===true)
  ||('isLine' in value&&value.isLine===true)||('isPoints' in value&&value.isPoints===true);
 /** @type {WeakMap<object,SimreadyRuntime>} */
 const runtimes=new WeakMap();
+class InvalidRuntimeMetadata extends Error {}
+
 /** Attach lazy simulation/interaction factories; loading never starts simulation. */
 export class NeedleSimreadyLoaderPlugin{
  /** @param {SimreadyParser} parser */
  constructor(parser){this.parser=parser;this.name=SIMREADY_EXTENSION;if(parser.json.extensions?.[SIMREADY_EXTENSION]){limitImageRequests(parser);normalizeTextureTransforms(parser);}}
  /** @param {SimreadyLoadResult} result */
  async afterRoot(result){
-  const payload=this.parser.json.extensions?.[SIMREADY_EXTENSION];if(!payload)return;
-  const data=validateSimreadyExtension(payload);
+  const parser=this.parser, payload=parser.json.extensions?.[SIMREADY_EXTENSION];
+  const required=parser.json.extensionsRequired?.includes(SIMREADY_EXTENSION);
+  if(payload===undefined&&!required)return;
+  try {
+   let data;
+   try { data=validateSimreadyExtension(payload); }
+   catch(error){
+    if(required||!(error instanceof TypeError))throw error;
+    throw new InvalidRuntimeMetadata(error.message,{cause:error});
+   }
+   await attachRuntime(parser,result,data);
+  } catch(error){
+   if(required||!(error instanceof InvalidRuntimeMetadata))throw error;
+   const version=isRecord(payload)&&Number.isInteger(payload.version)?payload.version:'unknown';
+   console.warn(`[SimReady] Skipping optional runtime metadata (version ${version}). ${error.message}`);
+  }
+ }
+}
+
+/** @param {SimreadyParser} parser @param {SimreadyLoadResult} result
+ * @param {ReturnType<typeof validateSimreadyExtension>} data */
+async function attachRuntime(parser,result,data){
   const cloned=structuredClone(data.snapshot);
   /** @type {import('./index.js').GltfPhysicsSnapshot & {shapes:Array<import('./index.js').PhysicsShape & {mesh?:number}>}} */
   const snapshot=cloned;
   for(const shape of snapshot.shapes)if(shape.type==='mesh'){
-   const definition=typeof shape.mesh==='number'&&Number.isInteger(shape.mesh)?this.parser.json.meshes?.[shape.mesh]:undefined;
-   if(!definition?.primitives?.length||shape.points!==undefined||shape.indices!==undefined)throw new Error('Invalid SimReady collision mesh reference.');
-   if(typeof shape.mesh!=='number')throw new Error('Invalid SimReady collision mesh reference.');
-   const object=await this.parser.getDependency('mesh',shape.mesh);
-   if(!isObject3D(object))throw new Error('Invalid SimReady collision mesh object.');
+   const definition=typeof shape.mesh==='number'&&Number.isInteger(shape.mesh)?parser.json.meshes?.[shape.mesh]:undefined;
+   if(!definition?.primitives?.length||shape.points!==undefined||shape.indices!==undefined)throw new InvalidRuntimeMetadata('Invalid SimReady collision mesh reference.');
+   if(typeof shape.mesh!=='number')throw new InvalidRuntimeMetadata('Invalid SimReady collision mesh reference.');
+   const object=await parser.getDependency('mesh',shape.mesh);
+   if(!isObject3D(object))throw new InvalidRuntimeMetadata('Invalid SimReady collision mesh object.');
    /** @type {CollisionPrimitive[]} */
    const parts=[];
    object.traverse(child=>{if(isCollisionPrimitive(child))parts.push(child);});
-   if(parts.length!==definition.primitives.length)throw new Error('Unsupported SimReady collision mesh layout.');
+   if(parts.length!==definition.primitives.length)throw new InvalidRuntimeMetadata('Unsupported SimReady collision mesh layout.');
    const points=[],indices=[];
    for(let part=0;part<parts.length;part++){
     const geometry=parts[part].geometry,position=geometry.getAttribute('position'),mode=definition.primitives[part].mode??4;
-    if(!position||position.itemSize!==3||geometry.morphAttributes.position?.length||!([4,5,6].includes(mode)||shape.approximation==='convexHull'))throw new Error('Unsupported SimReady collision mesh geometry.');
+    if(!position||position.itemSize!==3||geometry.morphAttributes.position?.length||!([4,5,6].includes(mode)||shape.approximation==='convexHull'))throw new InvalidRuntimeMetadata('Unsupported SimReady collision mesh geometry.');
     const offset=points.length/3;
     for(let vertex=0;vertex<position.count;vertex++){
      const point=[position.getX(vertex),position.getY(vertex),position.getZ(vertex)];
-     if(!point.every(Number.isFinite))throw new Error('Invalid SimReady collision mesh positions.');
+     if(!point.every(Number.isFinite))throw new InvalidRuntimeMetadata('Invalid SimReady collision mesh positions.');
      points.push(...point);
     }
     const indexAttribute=geometry.index;
     const source=indexAttribute?Array.from({length:indexAttribute.count},(_,index)=>indexAttribute.getX(index)):Array.from({length:position.count},(_,index)=>index);
     // GLTFLoader has already triangulated strips and fans, including winding.
     const triangles=[4,5,6].includes(mode);
-    if(source.some(index=>!Number.isInteger(index)||index<0||index>=position.count)||triangles&&source.length%3)throw new Error('Invalid SimReady collision mesh indices.');
+    if(source.some(index=>!Number.isInteger(index)||index<0||index>=position.count)||triangles&&source.length%3)throw new InvalidRuntimeMetadata('Invalid SimReady collision mesh indices.');
     if(triangles)for(const index of source)indices.push(index+offset);
    }
    shape.points=points;if(indices.length)shape.indices=indices;delete shape.mesh;
   }
   /** @param {number} index */
-  const node=async index=>{if(!Number.isInteger(index)||!this.parser.json.nodes?.[index])throw new Error('Invalid NEEDLE_simready node reference.');const object=await this.parser.getDependency('node',index);if(!isObject3D(object))throw new Error('Invalid NEEDLE_simready node.');return object;};
-  if(typeof data.stageNode!=='number')throw new Error('Invalid NEEDLE_simready stage node.');
-  const root=await node(data.stageNode),nodes=new Set();
-  for(const binding of data.bindings){
-   if(typeof binding.path!=='string'||nodes.has(binding.node)||binding.body&&!data.snapshot.bodies.some(body=>body.path===binding.body))throw new Error('Invalid or duplicate SimReady binding identity.');
-   nodes.add(binding.node);const object=await node(binding.node);
+  const node=async index=>{if(!Number.isInteger(index)||!parser.json.nodes?.[index])throw new InvalidRuntimeMetadata('Invalid NEEDLE_simready node reference.');const object=await parser.getDependency('node',index);if(!isObject3D(object))throw new InvalidRuntimeMetadata('Invalid NEEDLE_simready node.');return object;};
+  if(typeof data.stageNode!=='number')throw new InvalidRuntimeMetadata('Invalid NEEDLE_simready stage node.');
+  const root=await node(data.stageNode);
+  const bindings=await Promise.all(data.bindings.map(async binding=>({object:await node(binding.node),body:binding.body||binding.path})));
+  const mappingIssues=structuredClone(data.mappingIssues),semantics=structuredClone(data.semantics);
+  for(const [i,binding] of data.bindings.entries()){
+   const {object}=bindings[i];
    object.userData.usdPath=binding.body?binding.body+'/__visual/'+binding.node:binding.path;
    object.userData.usdSourcePath=binding.path;
    object.userData.usdBodyPath=binding.body;
+   const labels=semantics.filter(record=>record.path===binding.path);
+   if(labels.length)object.userData.simreadyLabels=structuredClone(labels.map(({taxonomy,labels})=>({taxonomy,labels})));
   }
-  const bindings=await Promise.all(data.bindings.map(async binding=>({object:await node(binding.node),body:binding.body||binding.path})));
   const ownedBindings=bindings.filter(binding=>snapshot.bodies.some(body=>body.path===binding.body));
   /** @param {boolean} worldSpace */
   const bind=worldSpace=>
    /** @param {ReadonlyMap<string,{data:import('./index.js').PhysicsBody,body:import('./kinematics.js').BodyPose}>} bodies
     * @param {(item:{path:string,type?:string},reason:string)=>void} _warn @param {AbortSignal} [signal] */
    (bodies,_warn,signal)=>{signal?.throwIfAborted();return bindVisuals({root,bodies,bindings:ownedBindings,worldSpace});};
-  const mappingIssues=structuredClone(data.mappingIssues),semantics=structuredClone(data.semantics);
-  for(const binding of data.bindings){const labels=semantics.filter(record=>record.path===binding.path);if(labels.length)(await node(binding.node)).userData.simreadyLabels=structuredClone(labels.map(({taxonomy,labels})=>({taxonomy,labels})));}
   /** @param {Omit<import('./kinematics.js').MechanismOptions,'snapshot'|'bindVisuals'>} [options] */
   async function createBoundMechanism(options={}){return withVisualController(root,async()=>{
    const{createMechanism}=await import('./kinematics.js');
@@ -125,7 +147,6 @@ export class NeedleSimreadyLoaderPlugin{
    createSimulation:/** @type {CreateBoundSimulation} */ (/** @type {unknown} */ (createBoundSimulation))};
   result.userData.simready=runtime;
   runtimes.set(result.scene,runtime);runtimes.set(result,runtime);runtimes.set(runtime,runtime);
- }
 }
 /** @type {WeakSet<SimreadyLoader>} */
 const loaders=new WeakSet();
