@@ -52,3 +52,118 @@ test('accepts the nearest bound instance, projects in root space, and releases g
     assert.deepEqual(events,Array(4).fill(['/Tip',true,'end',false]).flat());
     geometry.dispose();material.dispose();instances.dispose();
 });
+
+function hoverScene() {
+    const canvas = new EventTarget(), doc = new EventTarget(), win = new EventTarget();
+    let captured = null;
+    Object.assign(canvas, {ownerDocument:doc, style:{cursor:'crosshair'},
+        getBoundingClientRect:()=>({left:0,top:0,width:400,height:400}),
+        setPointerCapture:id=>{ captured=id; }, releasePointerCapture:()=>{ captured=null; }, hasPointerCapture:id=>id===captured});
+    doc.defaultView = win;
+    const camera = new PerspectiveCamera(45,1,.1,100);
+    camera.position.set(0,0,8); camera.lookAt(0,0,0);
+    const root = new Group(), geometry = new BoxGeometry(), material = new MeshBasicMaterial();
+    const lever = new Mesh(geometry,material), base = new Mesh(geometry,material);
+    lever.position.x = -1.5; base.position.x = 1.5;
+    root.add(lever,base);
+    const movable = new Set(['/Lever']);
+    const controller = {
+        bodyForObject(object){ return object===lever ? {data:{path:'/Lever'}} : object===base ? {data:{path:'/Base'}} : null; },
+        canDrag(path){ return movable.has(path); },
+        beginDrag(){ return true; }, moveDrag(){}, endDrag(){},
+    };
+    const hovered = [];
+    const binding = bindPointerDrag({element:canvas,camera,controller,root,onHoverChange:path=>hovered.push(path)});
+    function fire(target,type,clientX,extra={}) {
+        const e = Object.assign(new Event(type,{cancelable:true}),{pointerId:1,isPrimary:true,button:0,buttons:0,clientX,clientY:200},extra);
+        target.dispatchEvent(e); return e;
+    }
+    // Screen x for a world x on the z=0 plane.
+    const screenX = x => 200 + new Vector3(x,0,0).project(camera).x * 200;
+    return {canvas, doc, win, camera, root, controller, binding, hovered, fire, screenX, movable, lever, dispose(){ binding.dispose(); geometry.dispose(); material.dispose(); }};
+}
+
+test('reports hover changes only for parts the controller can drag, without styling the element', () => {
+    const scene = hoverScene(), {canvas, doc, hovered, fire, screenX} = scene;
+    try {
+        fire(canvas,'pointermove',screenX(-1.5));
+        fire(canvas,'pointermove',screenX(-1.4)); // same part: no repeat
+        fire(canvas,'pointermove',screenX(1.5));  // bound but not draggable
+        fire(canvas,'pointermove',5);             // empty space
+        fire(canvas,'pointermove',screenX(-1.5));
+        fire(canvas,'pointerleave',-10);
+        assert.deepEqual(hovered,['/Lever',null,'/Lever',null]);
+        fire(canvas,'pointermove',screenX(-1.5));
+        fire(canvas,'pointermove',screenX(1.5),{buttons:1}); // camera navigation in progress
+        assert.deepEqual(hovered.slice(4),['/Lever',null]);
+
+        fire(canvas,'pointermove',screenX(-1.5));
+        fire(canvas,'pointerdown',screenX(-1.5),{buttons:1});
+        assert.equal(scene.binding.dragging,true);
+        fire(doc,'pointermove',screenX(1.5),{buttons:1}); // dragging: hover is frozen on the grabbed part
+        assert.deepEqual(hovered.slice(6),['/Lever']);
+        fire(doc,'pointerup',screenX(1.5));               // released over a stationary part
+        assert.deepEqual(hovered.slice(6),['/Lever',null]);
+        assert.equal(canvas.style.cursor,'crosshair','the host owns cursor styling');
+    } finally { scene.dispose(); }
+});
+
+test('re-evaluates hover when draggability changes and clears it on dispose', () => {
+    const scene = hoverScene(), {canvas, hovered, fire, screenX, movable} = scene;
+    fire(canvas,'pointermove',screenX(-1.5));
+    movable.delete('/Lever');
+    fire(canvas,'pointermove',screenX(-1.45));
+    assert.deepEqual(hovered,['/Lever',null]);
+    movable.add('/Lever');
+    fire(canvas,'pointermove',screenX(-1.5));
+    scene.dispose();
+    assert.deepEqual(hovered,['/Lever',null,'/Lever',null]);
+    fire(canvas,'pointermove',screenX(-1.5));
+    assert.equal(hovered.length,4,'disposed bindings stop reporting');
+});
+
+test('ignores hidden surfaces when reporting hover', () => {
+    const scene = hoverScene(), {canvas, hovered, fire, screenX, lever} = scene;
+    try {
+        lever.visible = false;
+        fire(canvas,'pointermove',screenX(-1.5));
+        assert.deepEqual(hovered,[]);
+        lever.visible = true;
+        fire(canvas,'pointermove',screenX(-1.45));
+        assert.deepEqual(hovered,['/Lever']);
+    } finally { scene.dispose(); }
+});
+
+test('clears hover when a drag is interrupted rather than released', () => {
+    const scene = hoverScene(), {canvas, win, hovered, fire, screenX} = scene;
+    try {
+        fire(canvas,'pointermove',screenX(-1.5));
+        fire(canvas,'pointerdown',screenX(-1.5),{buttons:1});
+        win.dispatchEvent(new Event('blur'));
+        assert.equal(scene.binding.dragging,false);
+        assert.deepEqual(hovered,['/Lever',null]);
+    } finally { scene.dispose(); }
+});
+
+test('evaluates hover at most once per animation frame, using the latest pointer position', () => {
+    const scene = hoverScene(), {canvas, win, hovered, fire, screenX} = scene;
+    scene.binding.dispose();
+    const frames = [];
+    win.requestAnimationFrame = callback => frames.push(callback);
+    win.cancelAnimationFrame = () => {};
+    const reported = [];
+    const binding = bindPointerDrag({element:canvas,camera:scene.camera,controller:scene.controller,root:scene.root,onHoverChange:path=>reported.push(path)});
+    try {
+        fire(canvas,'pointermove',screenX(1.5));
+        fire(canvas,'pointermove',screenX(-1.5));
+        assert.equal(frames.length,1,'one frame requested for a burst of moves');
+        assert.deepEqual(reported,[]);
+        frames.shift()();
+        assert.deepEqual(reported,['/Lever'],'only the latest position is evaluated');
+        fire(canvas,'pointermove',screenX(1.5));
+        binding.dispose();
+        frames.shift()?.();
+        assert.deepEqual(reported,['/Lever',null],'a pending evaluation does not run after dispose');
+    } finally { binding.dispose(); }
+    assert.deepEqual(hovered,[]);
+});

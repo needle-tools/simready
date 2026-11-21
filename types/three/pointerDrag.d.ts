@@ -1,21 +1,24 @@
 /** @typedef {import('three').Object3D} Object3D */
 /** @typedef {import('three').Camera} Camera */
 /** @typedef {{beginDrag(path:string, point:Vector3):boolean, moveDrag(point:Vector3):void, endDrag():void,
+ * canDrag?:(path:string)=>boolean,
  * bodyForObject?:(object:Object3D,instanceIndex?:number)=>{data:{path:string}}|null|undefined}} PointerDragController */
 /**
  * Bind a mechanism or simulation to a canvas. A movable surface captures the
  * pointer; stationary foreground surfaces and misses leave camera navigation alone.
  * The drag plane passes through the hit point and faces the camera at grab time.
+ * The binding never styles the element: hosts set cursors from `onHoverChange`
+ * (the draggable part under an idle pointer, or null) and `onDraggingChange`.
  *
  * @template {PointerDragController} C
  * @param {{element:HTMLElement, camera:Camera|(()=>Camera|null|undefined),
  * controller:C|(()=>C|null|undefined), root?:Object3D|(()=>Object3D|null|undefined),
  * pick?:(event:PointerEvent,raycaster:Raycaster,controller:C)=>{path:string,point:Vector3}|null|undefined,
- * onDraggingChange?:(active:boolean)=>void,onMove?:()=>void}} options
+ * onDraggingChange?:(active:boolean)=>void,onHoverChange?:(path:string|null)=>void,onMove?:()=>void}} options
  * `root` is the controller's local coordinate frame. Omit it for world-space
  * physics and supply a picker. Custom pickers always return world-space points.
  */
-export function bindPointerDrag<C extends PointerDragController>({ element, camera, controller, root, pick, onDraggingChange, onMove }: {
+export function bindPointerDrag<C extends PointerDragController>({ element, camera, controller, root, pick, onDraggingChange, onHoverChange, onMove }: {
     element: HTMLElement;
     camera: Camera | (() => Camera | null | undefined);
     controller: C | (() => C | null | undefined);
@@ -25,9 +28,11 @@ export function bindPointerDrag<C extends PointerDragController>({ element, came
         point: Vector3;
     } | null | undefined;
     onDraggingChange?: (active: boolean) => void;
+    onHoverChange?: (path: string | null) => void;
     onMove?: () => void;
 }): {
     readonly dragging: boolean;
+    readonly hovered: string | null;
     cancel: () => void;
     dispose(): void;
 };
@@ -37,6 +42,7 @@ export type PointerDragController = {
     beginDrag(path: string, point: Vector3): boolean;
     moveDrag(point: Vector3): void;
     endDrag(): void;
+    canDrag?: (path: string) => boolean;
     bodyForObject?: (object: Object3D, instanceIndex?: number) => {
         data: {
             path: string;

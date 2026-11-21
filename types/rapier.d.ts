@@ -99,6 +99,7 @@ export type Simulation<W = World<import("./rapier-types.js").RigidBody>, B = imp
     bodyForObject(object: unknown, instanceIndex?: number): {
         data: PhysicsBody;
     } | null | undefined;
+    canDrag(path: string): boolean;
     beginDrag(path: string, position: import("./rapier-types.js").Vector): boolean;
     moveDrag(position: import("./rapier-types.js").Vector): void;
     endDrag(): void;

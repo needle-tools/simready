@@ -42,7 +42,7 @@
  * play():void,pause():void,isPlaying():boolean,update(dt:number):void,step(dt?:number):void,
  * getJointValue(path:string):number|null,setJointTarget(path:string,target:{position?:number,velocity?:number}):boolean,
  * reset():void,dispose():void,bodyForObject(object:unknown,instanceIndex?:number):{data:PhysicsBody}|null|undefined,
- * beginDrag(path:string,position:import('./rapier-types.js').Vector):boolean,
+ * canDrag(path:string):boolean,beginDrag(path:string,position:import('./rapier-types.js').Vector):boolean,
  * moveDrag(position:import('./rapier-types.js').Vector):void,endDrag():void
  * }} Simulation */
 /** @template {RigidBody} [B=RigidBody]

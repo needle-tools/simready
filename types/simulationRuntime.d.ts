@@ -39,6 +39,8 @@ export function createSimulationRuntime<B extends RuntimeBody>({ snapshot, mode,
     bodyForObject: (object: unknown, instanceIndex?: number) => {
         data: import("./rapier.js").PhysicsBody;
     } | null | undefined;
+    /** Whether `beginDrag` would accept this body now. @param {string} path */
+    canDrag(path: string): boolean;
     /** @param {string} path @param {Vector} position */
     beginDrag(path: string, position: Vector): boolean;
     /** @param {Vector} position */

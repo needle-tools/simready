@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Report the draggable part under an idle pointer through `bindPointerDrag({onHoverChange})`, and add `canDrag(path)` to mechanisms and simulations. **Breaking:** the binding no longer sets the element's cursor while dragging; hosts style cursors from `onHoverChange` and `onDraggingChange`.
+
 - Share schema validation between the reader and writer for runtime physics and semantic labels.
 
 - Preserve compound trigger membership during node reordering and write mesh collider references in the Khronos glTF physics draft format.

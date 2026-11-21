@@ -151,6 +151,8 @@ export function createSimulationRuntime({snapshot, mode, bodies, joints, backend
         },
         /** @param {unknown} object @param {number} [instanceIndex] */
         bodyForObject: (object, instanceIndex) => gone() ? null : binding.bodyForObject(object, instanceIndex),
+        /** Whether `beginDrag` would accept this body now. @param {string} path */
+        canDrag(path) { return !gone() && playing && !!bodies.get(path)?.body.isDynamic(); },
         /** @param {string} path @param {Vector} position */
         beginDrag(path, position) {
             if (gone()) return false;

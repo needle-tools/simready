@@ -266,6 +266,8 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
    /** @param {string} path @param {import('./index.js').PhysicsRotation} next */
    setJointRotation(path,next){const record=joints.get(path);if(!record?.rotationDofs.length||next.length!==4||!next.every(Number.isFinite)||new Quaternion(...next).lengthSq()<1e-12)return false;return setRotation(record,new Quaternion(...next));},
    jointForBody,
+   /** Whether `beginDrag` would accept this body now. @param {string} path */
+   canDrag(path){return playing&&valid&&!disposed&&!!jointForBody(path);},
    /** @param {import('three').Object3D} object @param {number} [index] */
    bodyForObject(object,index){return valid?binding.bodyForObject(object,index):null;},
    /** @param {string} path @param {import('three').Vector3Like} position */

@@ -248,18 +248,27 @@ import {bindPointerDrag} from '@needle-tools/simready/three';
 
 const mechanism = await runtime.createMechanism({dragMode: 'point'});
 mechanism.play();
+let hovering = false, dragging = false;
+const updateCursor = () => {
+  renderer.domElement.style.cursor = dragging ? 'grabbing' : hovering ? 'grab' : '';
+};
 const pointer = bindPointerDrag({
   element: renderer.domElement,
   camera,
   root: mechanism.root,
   controller: mechanism,
   onMove: requestRender, // for on-demand rendering
+  // The binding never changes cursors or styles; the host decides how to show them.
+  onHoverChange: path => { hovering = !!path; updateCursor(); },
+  onDraggingChange: active => { dragging = active; updateCursor(); },
 });
 
 // When unloading this viewer or replacing its controller:
 pointer.dispose();
 mechanism.dispose();
 ```
+
+`onHoverChange` reports the part an idle pointer would grab, or `null`, at most once per animation frame and only when it changes. It reports only parts the controller's `canDrag(path)` accepts: a moving joint for mechanisms, a dynamic body for simulations, and only while playing. Nothing is offered while a button is held for camera navigation. During a gesture the grabbed part stays hovered; an interrupted gesture clears it.
 
 The adapter raycasts the nearest visible surface and respects instance bindings. Accepted grabs follow a camera-facing plane through the hit. Misses, stationary foreground parts and modified clicks remain available to camera controls. Hosts with their own picking can supply `pick(event, raycaster, controller)` and return a body path and world-space hit point. Call `pointer.cancel()` before replacing a live controller. For XR input, send the tracked point in mechanism-local coordinates directly to `beginDrag`, `moveDrag` and `endDrag`.
 
