@@ -36,6 +36,9 @@ export type Joint = Frame & {
     setMaxLimit(dof: number, value: number): void;
     minDoFLimit: Float32Array;
     maxDoFLimit: Float32Array;
+    setRestPoseValue(dof: number, value: number): boolean;
+    dofWeights?: Float32Array;
+    dofStiffness?: Float32Array;
     getClosureError(position: Float64Array, rotation: Float64Array): void;
 };
 /**
@@ -47,6 +50,8 @@ export type Solver = {
     translationConvergeThreshold: number;
     rotationConvergeThreshold: number;
     useSVD: boolean;
+    dampingFactor: number;
+    translationErrorClamp: number;
     solve(): void;
 };
 /**

@@ -18,11 +18,12 @@ isDynamic():boolean}} BodyPose */
 /** @typedef {{snapshot:PhysicsSnapshot,dragMode?:'joint'|'point',loadKinematics?:()=>Promise<unknown>,framePolicy?:'strict'|'preserve-rest',
  * bindVisuals?:(bodies:MechanismBodies,warn:(item:{path:string,type?:string},reason:string)=>void)=>VisualBinding|Promise<VisualBinding>}} MechanismOptions */
 
-import {pointDragFactory} from './kinematicPointDrag.js';
+import {effectiveInertia,pointDragFactory} from './kinematicPointDrag.js';
 import {authoredAngle} from './jointCoordinates.js';
 import {Euler,Matrix4,Quaternion,Vector3} from 'three';
 import {loadKinematicsModule} from './kinematics-types.js';
 import {validateSnapshot} from './index.js';
+import {computeMassProperties} from './massProperties.js';
 const emptyVisualBinding={sync(){},reset(){},bodyForObject(){return null;}};
 
 const unit=new Vector3(1,1,1), identity=new Matrix4();
@@ -206,7 +207,45 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
   for(const item of bodies.values())if(item.position.distanceTo(new Vector3(...item.data.position))>tolerance*10||item.rotation.angleTo(new Quaternion(...item.data.rotation))>1e-3){warn(item.data,'Authored joint frames do not agree with this body pose.');valid=false;}
   const binding=await bindVisuals?.(bodies,warn)||emptyVisualBinding;visuals=binding;
   function sync(){updatePoses();binding.sync();}
-  const beginPointDrag=dragMode==='point'?pointDragFactory(core,bodies,joints,parents,scale,sync):null;
+  const masses=computeMassProperties(snapshot),kilograms=(snapshot.kilogramsPerUnit??0)>0?snapshot.kilogramsPerUnit??1:1;
+  /** World pivot and axis of a joint's degree of freedom, in snapshot units. @param {JointRecord} record */
+  function jointAxis(record){
+   const parent=record.parent?rigid(body(record.parent).link):identity;
+   const origin=parent.clone().multiply(frame(record.data,record.sign<0?1:0)),p=new Vector3(),q=new Quaternion();origin.decompose(p,q,new Vector3());
+   return {pivot:p,axis:axis(record.data.axis).applyQuaternion(q)};
+  }
+  const dynamics={masses,kilograms,jointAxis};
+  const beginPointDrag=dragMode==='point'?pointDragFactory(core,bodies,joints,parents,scale,sync,dynamics):null;
+  /** Joints whose authored drive relaxes them toward its target when nothing holds them, with their velocity. */
+  const driven=new Map([...joints.values()].filter(record=>record.data.drive?.enabled&&record.dof!==null&&!record.closure&&!record.data.mimic&&record.lower<record.upper).map(record=>[record,0]));
+  /** Advance driven joints by `dt` seconds as spring-dampers in joint space: no gravity, contacts or
+   * coupled rigid-body dynamics. Returns whether any joint moved. @param {number} dt */
+  function relax(dt){
+   if(!playing||!valid||disposed||drag||!(dt>0)||!driven.size)return false;
+   let moved=false;
+   for(const [record,velocity] of driven){
+    const drive=/** @type {import('./index.js').PhysicsDrive} */(record.data.drive),inertia=effectiveInertia(record,bodies,parents,scale,dynamics);
+    if(!(inertia>0))continue;
+    // SI coordinates: radians for hinges, metres for sliders.
+    const unit=record.angular?Math.PI/180:scale,current=value(record)*unit,target=drive.targetPosition*unit,targetVelocity=drive.targetVelocity*unit;
+    const gain=drive.acceleration?inertia:kilograms*(record.angular?180/Math.PI*scale**2:1);
+    const child=body(record.child).data,bodyDamping=record.angular?child.angularDamping??.05:child.linearDamping??0;
+    const stiffness=drive.stiffness*gain,damping=drive.damping*gain;
+    // Implicit Euler stays stable for any frame time and stiffness.
+    const next=(velocity+dt*(stiffness*(target-current)+damping*targetVelocity)/inertia)/(1+dt*(damping/inertia+bodyDamping)+dt*dt*stiffness/inertia);
+    if(Math.abs(next)<1e-6&&Math.abs(target-current)<1e-6&&targetVelocity===0){driven.set(record,0);continue;}
+    const before=value(record),requested=(current+dt*next)/unit;
+    if(!setValue(record,requested)){driven.set(record,0);continue;}
+    const after=value(record);
+    // A limit or a constraint that stopped the joint also stops its motion. Joint values are
+    // single precision, so only a clear shortfall counts.
+    const stopped=requested<=record.lower||requested>=record.upper||Math.abs(after-requested)>1e-3*Math.max(1,Math.abs(requested));
+    driven.set(record,stopped?0:next);
+    moved||=Math.abs(after-before)>1e-9;
+   }
+   return moved;
+  }
+  const rest=()=>{for(const record of driven.keys())driven.set(record,0);};
   function closeEnough(){
    for(const record of joints.values())if(record.rotationDofs.length){const q=rotationValue(record);if(limitRotation(record.data,q).angleTo(q)>1e-5)return false;}
    return closures.every(({joint})=>{const p=new Float64Array(3),r=new Float64Array(3);joint.getClosureError(p,r);return Math.hypot(...p)<tolerance*5&&Math.hypot(...r)<1e-4;});
@@ -255,12 +294,14 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
   return {
    mode:/** @type {const} */('interaction'),bodies,joints,unsupported,adaptations,roots,metersPerUnit:scale,
    play(){if(!disposed)playing=true;},pause(){playing=false;drag=null;},isPlaying:()=>playing,
-   /** @param {number} [_dt] */
-   update(_dt){},
+   /** Let joints with authored drives relax toward their targets while nothing holds them.
+    * Call once per frame with the elapsed seconds; returns whether any joint moved.
+    * @param {number} [dt] */
+   update(dt=0){return relax(dt);},
    /** @param {string} path */
    getJointValue(path){const record=joints.get(path);return record?.dof!==null&&record?value(record):null;},
    /** @param {string} path @param {number} next */
-   setJointValue(path,next){const record=joints.get(path);return !!record&&setValue(record,next);},
+   setJointValue(path,next){const record=joints.get(path);if(record&&driven.has(record))driven.set(record,0);return !!record&&setValue(record,next);},
    /** @param {string} path */
    getJointRotation(path){const record=joints.get(path);return record?.rotationDofs.length?rotationValue(record).toArray():null;},
    /** @param {string} path @param {import('./index.js').PhysicsRotation} next */
@@ -273,6 +314,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
    /** @param {string} path @param {import('three').Vector3Like} position */
    beginDrag(path,position){
     const record=jointForBody(path);if(!playing||!valid||!record)return false;
+    rest();
     updatePoses();
     drag=beginPointDrag?.(path,position)??null;
     if(drag)return true;
@@ -295,7 +337,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
     setValue(record,initial+delta*record.sign);
    },
    endDrag(){drag=null;},
-   reset(){drag=null;playing=false;for(const record of joints.values())if(record.initialRotation)setRawRotation(record,record.initialRotation);else if(record.dof!==null)record.joint.setDoFValue(record.dof,record.initial*record.sign*(record.angular?Math.PI/180:1));updatePoses();binding.reset();},
+   reset(){drag=null;playing=false;rest();for(const record of joints.values())if(record.initialRotation)setRawRotation(record,record.initialRotation);else if(record.dof!==null)record.joint.setDoFValue(record.dof,record.initial*record.sign*(record.angular?Math.PI/180:1));updatePoses();binding.reset();},
    dispose(){if(disposed)return;this.reset();disposed=true;},
   };
  }catch(error){visuals?.reset();throw error;}

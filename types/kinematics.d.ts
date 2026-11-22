@@ -11,8 +11,10 @@ export function createMechanism({ snapshot, bindVisuals, loadKinematics, dragMod
     play(): void;
     pause(): void;
     isPlaying: () => boolean;
-    /** @param {number} [_dt] */
-    update(_dt?: number): void;
+    /** Let joints with authored drives relax toward their targets while nothing holds them.
+     * Call once per frame with the elapsed seconds; returns whether any joint moved.
+     * @param {number} [dt] */
+    update(dt?: number): boolean;
     /** @param {string} path */
     getJointValue(path: string): number | null;
     /** @param {string} path @param {number} next */

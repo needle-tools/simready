@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Return joints with authored drives toward their targets in kinematic mode through `mechanism.update(dt)`, such as a lever's return spring after a drag.
+- Point dragging moves lighter joints first, by the mass each joint carries, and authored drives resist the drag like return springs, with the same pointer stiffness as Rapier dragging. This uses the Needle fork of closed-chain-ik; with upstream closed-chain-ik, point dragging keeps its previous behavior.
+- Drag casters and other joint chains past their reach without the pose jumping between nearly equal solutions.
 - Compute each body's mass, center of mass and principal inertia from its colliders and authored values with `computeMassProperties(snapshot)`, following USD's precedence. Rapier interaction mode uses these masses instead of a unit mass.
 
 - Report the draggable part under an idle pointer through `bindPointerDrag({onHoverChange})`, and add `canDrag(path)` to mechanisms and simulations. **Breaking:** the binding no longer sets the element's cursor while dragging; hosts style cursors from `onHoverChange` and `onDraggingChange`.
