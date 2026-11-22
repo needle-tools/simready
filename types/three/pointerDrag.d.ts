@@ -1,6 +1,6 @@
 /** @typedef {import('three').Object3D} Object3D */
 /** @typedef {import('three').Camera} Camera */
-/** @typedef {{beginDrag(path:string, point:Vector3):boolean, moveDrag(point:Vector3):void, endDrag():void,
+/** @typedef {{beginDrag(path:string, point:Vector3, options?:{normal?:Vector3}):boolean, moveDrag(point:Vector3):void, endDrag():void,
  * canDrag?:(path:string)=>boolean,
  * bodyForObject?:(object:Object3D,instanceIndex?:number)=>{data:{path:string}}|null|undefined}} PointerDragController */
 /**
@@ -39,7 +39,9 @@ export function bindPointerDrag<C extends PointerDragController>({ element, came
 export type Object3D = import("three").Object3D;
 export type Camera = import("three").Camera;
 export type PointerDragController = {
-    beginDrag(path: string, point: Vector3): boolean;
+    beginDrag(path: string, point: Vector3, options?: {
+        normal?: Vector3;
+    }): boolean;
     moveDrag(point: Vector3): void;
     endDrag(): void;
     canDrag?: (path: string) => boolean;

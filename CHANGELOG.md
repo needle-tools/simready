@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Roll a hinge seen edge-on with the pointer instead of flipping its angle where the pointer crosses the axis. `bindPointerDrag` passes the drag plane's normal to `beginDrag(path, point, {normal})`; callers without one keep the previous mapping.
 - Return joints with authored drives toward their targets in kinematic mode through `mechanism.update(dt)`, such as a lever's return spring after a drag.
 - Point dragging moves lighter joints first, by the mass each joint carries, and authored drives resist the drag like return springs, with the same pointer stiffness as Rapier dragging. This uses the Needle fork of closed-chain-ik; with upstream closed-chain-ik, point dragging keeps its previous behavior.
 - Drag casters and other joint chains past their reach without the pose jumping between nearly equal solutions.

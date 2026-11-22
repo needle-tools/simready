@@ -30,8 +30,12 @@ export function createMechanism({ snapshot, bindVisuals, loadKinematics, dragMod
     bodyForObject(object: import("three").Object3D, index?: number): {
         data: import("./rapier.js").PhysicsBody;
     } | null | undefined;
-    /** @param {string} path @param {import('three').Vector3Like} position */
-    beginDrag(path: string, position: import("three").Vector3Like): boolean;
+    /** `normal` is the drag plane's normal in mechanism coordinates. A hinge seen nearly edge-on
+     * then rolls with the pointer along its rim instead of following it around the axis.
+     * @param {string} path @param {import('three').Vector3Like} position @param {{normal?:import('three').Vector3Like}} [options] */
+    beginDrag(path: string, position: import("three").Vector3Like, options?: {
+        normal?: import("three").Vector3Like;
+    }): boolean;
     /** @param {import('three').Vector3Like} position */
     moveDrag(position: import("three").Vector3Like): void;
     endDrag(): void;

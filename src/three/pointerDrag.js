@@ -3,7 +3,7 @@ import {Plane, Raycaster, Vector2, Vector3} from 'three';
 
 /** @typedef {import('three').Object3D} Object3D */
 /** @typedef {import('three').Camera} Camera */
-/** @typedef {{beginDrag(path:string, point:Vector3):boolean, moveDrag(point:Vector3):void, endDrag():void,
+/** @typedef {{beginDrag(path:string, point:Vector3, options?:{normal?:Vector3}):boolean, moveDrag(point:Vector3):void, endDrag():void,
  * canDrag?:(path:string)=>boolean,
  * bodyForObject?:(object:Object3D,instanceIndex?:number)=>{data:{path:string}}|null|undefined}} PointerDragController */
 
@@ -155,7 +155,10 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
         const {hit, view, frame} = found;
         point.copy(hit.point);
         if (frame) frame.worldToLocal(point);
-        if (!target.beginDrag(hit.path, point)) return;
+        // The drag plane's normal, in the controller's frame, tells a hinge how it is seen.
+        const normal = view.getWorldDirection(new Vector3());
+        if (frame) normal.transformDirection(frame.matrixWorld.clone().invert());
+        if (!target.beginDrag(hit.path, point, {normal})) return;
         drag = {pointerId:event.pointerId, controller:target, root:frame};
         dropPendingHover();
         setHovered(hit.path);

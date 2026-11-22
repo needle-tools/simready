@@ -69,7 +69,7 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
  function body(path){const record=bodies.get(path);if(!record)throw new Error('Unavailable mechanism body: '+path);return record;}
  /** @param {{path:string,type?:string}} data @param {string} reason */
  const warn=(data,reason)=>unsupported.push({path:data.path,type:data.type,reason});
- /** @type {{record:JointRecord,point:Vector3,pivot:Vector3,axis:Vector3,initial:number,angle:number,rotation:Quaternion|null,frameRotation:Quaternion}|((point:import('three').Vector3Like)=>void)|null} */
+ /** @type {{record:JointRecord,point:Vector3,pivot:Vector3,axis:Vector3,initial:number,angle:number,rotation:Quaternion|null,frameRotation:Quaternion,roll:{across:Vector3,radius:number,sign:number}|null}|((point:import('three').Vector3Like)=>void)|null} */
  let drag=null;
  /** @type {VisualBinding|undefined} */
  let visuals;
@@ -311,8 +311,10 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
    canDrag(path){return playing&&valid&&!disposed&&!!jointForBody(path);},
    /** @param {import('three').Object3D} object @param {number} [index] */
    bodyForObject(object,index){return valid?binding.bodyForObject(object,index):null;},
-   /** @param {string} path @param {import('three').Vector3Like} position */
-   beginDrag(path,position){
+   /** `normal` is the drag plane's normal in mechanism coordinates. A hinge seen nearly edge-on
+    * then rolls with the pointer along its rim instead of following it around the axis.
+    * @param {string} path @param {import('three').Vector3Like} position @param {{normal?:import('three').Vector3Like}} [options] */
+   beginDrag(path,position,options={}){
     const record=jointForBody(path);if(!playing||!valid||!record)return false;
     rest();
     updatePoses();
@@ -320,7 +322,17 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
     if(drag)return true;
     const parent=record.parent?rigid(body(record.parent).link):identity;
     const origin=parent.clone().multiply(frame(record.data,record.sign<0?1:0)),p=new Vector3(),q=new Quaternion();origin.decompose(p,q,new Vector3());
-    drag={record,point:new Vector3().copy(position),pivot:p,axis:axis(record.data.axis).applyQuaternion(q),initial:value(record),angle:0,rotation:record.rotationDofs.length?rotationValue(record,false):null,frameRotation:q};return true;
+    const hinge=axis(record.data.axis).applyQuaternion(q),normal=options.normal?new Vector3().copy(options.normal):null;
+    // Seen edge-on, roll along the screen direction across the axis, turning the way the grabbed
+    // side of the rim moves; on the silhouette the side facing the camera decides.
+    let roll=null;
+    if(normal&&normal.lengthSq()>1e-12&&Math.abs(normal.normalize().dot(hinge))<.3){
+     const across=normal.clone().cross(hinge).normalize(),arm=new Vector3().copy(position).sub(p).projectOnPlane(hinge),radius=arm.length();
+     const facing=normal.clone().negate().projectOnPlane(hinge),side=hinge.clone().cross(radius>1e-12?arm:facing).dot(across);
+     const sign=Math.abs(side)>.2*Math.max(radius,1e-12)?Math.sign(side):Math.sign(hinge.clone().cross(facing).dot(across))||1;
+     if(radius>1e-12)roll={across,radius,sign};
+    }
+    drag={record,point:new Vector3().copy(position),pivot:p,axis:hinge,initial:value(record),angle:0,rotation:record.rotationDofs.length?rotationValue(record,false):null,frameRotation:q,roll};return true;
    },
    /** @param {import('three').Vector3Like} position */
    moveDrag(position){
@@ -331,7 +343,12 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
      const q=new Quaternion().setFromUnitVectors(a.normalize(),b.normalize()),f=drag.frameRotation;
      q.premultiply(f.clone().invert()).multiply(f).multiply(drag.rotation);if(record.sign<0)q.invert();setRotation(record,q);return;
     }
-    if(record.angular){const a=point.clone().sub(pivot).projectOnPlane(axis),b=new Vector3().copy(position).sub(pivot).projectOnPlane(axis);if(a.lengthSq()<1e-12||b.lengthSq()<1e-12)return;
+    if(record.angular&&drag.roll){
+     // Seen edge-on, the pointer's path projects onto a line through the axis, where the angle
+     // around it would flip.
+     const{across,radius,sign}=drag.roll;
+     delta=sign*new Vector3().copy(position).sub(point).dot(across)/radius*180/Math.PI;
+    }else if(record.angular){const a=point.clone().sub(pivot).projectOnPlane(axis),b=new Vector3().copy(position).sub(pivot).projectOnPlane(axis);if(a.lengthSq()<1e-12||b.lengthSq()<1e-12)return;
      let angle=Math.atan2(axis.dot(a.clone().cross(b)),a.dot(b));angle+=Math.round((drag.angle-angle)/(2*Math.PI))*2*Math.PI;drag.angle=angle;delta=angle*180/Math.PI;
     }else delta=new Vector3().copy(position).sub(point).dot(axis);
     setValue(record,initial+delta*record.sign);
