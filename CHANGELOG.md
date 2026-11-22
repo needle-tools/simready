@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compute each body's mass, center of mass and principal inertia from its colliders and authored values with `computeMassProperties(snapshot)`, following USD's precedence. Rapier interaction mode uses these masses instead of a unit mass.
+
 - Report the draggable part under an idle pointer through `bindPointerDrag({onHoverChange})`, and add `canDrag(path)` to mechanisms and simulations. **Breaking:** the binding no longer sets the element's cursor while dragging; hosts style cursors from `onHoverChange` and `onDraggingChange`.
 
 - Share schema validation between the reader and writer for runtime physics and semantic labels.

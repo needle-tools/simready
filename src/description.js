@@ -37,7 +37,7 @@
  * }} SimulationDescription */
 
 import {Quaternion, Vector3} from 'three';
-import {shiftInertiaToCenterOfMass} from './massProperties.js';
+import {computeMassProperties, shiftInertiaToCenterOfMass} from './massProperties.js';
 import {isNumberBuffer} from './validation.js';
 import {isBoundedThreshold} from './limits.js';
 
@@ -94,6 +94,8 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
     const inScene = item => item.simulationOwners?.length ? !!scene && item.simulationOwners.includes(scene.path)
         : !scene || scene.path === scenes[0]?.path;
 
+    // Interaction builds no colliders, so derive their mass here instead of using 1.
+    const derivedMass = mode === 'interaction' ? computeMassProperties(snapshot) : null;
     /** @type {BodyDescription[]} */
     const bodies = [];
     /** @type {Map<string,PhysicsBody>} */
@@ -108,7 +110,7 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
             ...(data.angularDamping !== undefined ? {angularDamping: data.angularDamping} : {}),
             ...(data.gravityScale !== undefined ? {gravityScale:data.gravityScale} : {}),
             sleeping: !!data.startsAsleep, continuousCollision: type === 'dynamic' && (data.continuousCollision ?? true),
-            mass: bodyMass(data, mode, kgpu)});
+            mass: bodyMass(data, mode, kgpu, derivedMass?.get(data.path))});
         bodyData.set(data.path, data);
     }
 
@@ -316,9 +318,17 @@ export function describeSimulation(snapshot, {scenePath, mode = 'simulation', ca
         }};
 }
 
-/** Mass overrides for a body. In interaction mode there are no colliders to derive mass from, so we always fill in every value. */
-/** @param {PhysicsBody} data @param {'simulation'|'interaction'} mode @param {number} kgpu @returns {MassDescription|undefined} */
-function bodyMass(data, mode, kgpu) {
+/** Mass overrides for a body. Interaction builds no colliders, so it fills in every value from the
+ * mass derived from the snapshot's colliders and authored properties.
+ * @param {PhysicsBody} data @param {'simulation'|'interaction'} mode @param {number} kgpu
+ * @param {import('./massProperties.js').BodyMassProperties} [derived] @returns {MassDescription|undefined} */
+function bodyMass(data, mode, kgpu, derived) {
+    if (mode === 'interaction' && derived) {
+        const centerOfMass = data.centerOfMass ? new Vector3().fromArray(data.centerOfMass).multiply(new Vector3().fromArray(data.scale || [1, 1, 1]))
+            : new Vector3().fromArray(derived.centerOfMass);
+        return {mass: derived.mass * kgpu, centerOfMass: plain(centerOfMass),
+            inertia: plain(new Vector3().fromArray(derived.diagonalInertia).multiplyScalar(kgpu)), inertiaRotation: rotation(q(derived.principalAxes))};
+    }
     const authored = positive(data.mass) || data.centerOfMass || data.diagonalInertia || data.principalAxes;
     if (mode !== 'interaction' && !authored) return undefined;
     const centerOfMass = data.centerOfMass ? new Vector3().fromArray(data.centerOfMass).multiply(new Vector3().fromArray(data.scale || [1, 1, 1])) : undefined;

@@ -342,6 +342,11 @@ freeing the host world. Needle handles this registration automatically.
 ## Physics support
 
 Joint frames, limits, drives, collision filters and mass properties are retained.
+`computeMassProperties(snapshot)` returns each body's mass, center of mass and principal
+inertia in the snapshot's units, without loading Rapier. An authored body mass wins;
+otherwise collider masses add up, each from its authored mass or its volume times the
+collider's, body's or material's density, else 1000 kg/m³. Authored centers of mass and
+inertia override derived ones.
 Fixed articulation links use reduced coordinates; movable links use impulse
 constraints. SDF meshes use convex decomposition with concave compound contacts,
 rather than PhysX SDF evaluation. Rapier also uses convex compounds for moving

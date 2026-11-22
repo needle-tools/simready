@@ -136,3 +136,4 @@ export function validateSimreadyExtension(value){
  return value;
 }
 export {createSimreadyRuntimeExtension as createSimreadyExtension};
+export {computeMassProperties} from './massProperties.js';

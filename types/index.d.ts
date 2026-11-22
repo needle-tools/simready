@@ -21,6 +21,7 @@ export function createSimreadyRuntimeExtension({ snapshot, stageNode, bindings, 
 export function validateSimreadyExtension(value: unknown): SimreadyRuntimeExtension;
 export const SIMREADY_EXTENSION: "NEEDLE_simready";
 export { createSimreadyRuntimeExtension as createSimreadyExtension };
+export { computeMassProperties } from "./massProperties.js";
 export type PhysicsVector = [number, number, number];
 export type PhysicsRotation = [number, number, number, number];
 export type PhysicsIssue = {

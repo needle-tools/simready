@@ -14,5 +14,23 @@ export function shiftInertiaToCenterOfMass(diagonalInertia: import("./index.js")
     diagonalInertia: Vector3;
     principalAxes: Quaternion;
 };
+/**
+ * Mass, center of mass and principal inertia of every body in a snapshot, in the
+ * snapshot's units and each body's local frame. Follows USD's precedence: an authored
+ * body mass wins, otherwise the colliders' masses add up. A collider uses its authored
+ * mass, else its volume times the collider's, the body's or its material's density,
+ * else 1000 kg/m³. Authored centers of mass and inertia override derived ones. A body
+ * with no colliders and no authored mass gets mass 1 and unit inertia.
+ * @param {import('./index.js').PhysicsSnapshot} snapshot
+ * @returns {Map<string,BodyMassProperties>}
+ */
+export function computeMassProperties(snapshot: import("./index.js").PhysicsSnapshot): Map<string, BodyMassProperties>;
+export type BodyMassProperties = {
+    mass: number;
+    centerOfMass: import("./index.js").PhysicsVector;
+    diagonalInertia: import("./index.js").PhysicsVector;
+    principalAxes: import("./index.js").PhysicsRotation;
+    source: "authored" | "colliders" | "default";
+};
 import { Vector3 } from 'three';
 import { Quaternion } from 'three';
