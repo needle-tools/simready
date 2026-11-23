@@ -18,9 +18,11 @@ interactive picking in Omniverse during simulation.
   several joints could follow, the lighter ones move more, weighted by the inertia each joint
   carries (`computeMassProperties`). Drives do not resist.
 - When you let go, every driven joint the drag moved keeps its new value as its drive target.
-  `setJointValue()` does the same. The pose therefore holds instead of springing back.
+  `setJointValue()` does the same, also for driven joints the set joint carried along. The pose
+  therefore holds instead of springing back.
 - Joints you did not move keep their authored targets. With `mechanism.update(dt)` they move
-  toward them as springs and dampers in joint space, within their force limits. `reset()`
+  toward them as springs and dampers in joint space, within their force limits. Target
+  velocities apply in simulation only, so a motor does not turn a posed joint. `reset()`
   restores every authored target. The snapshot itself is never changed.
 
 This follows how NVIDIA's authoring tools pose articulations outside simulation. Isaac Sim's

@@ -236,7 +236,9 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
     const drive=/** @type {import('./index.js').PhysicsDrive} */(record.data.drive),inertia=effectiveInertia(record,bodies,parents,scale,dynamics);
     if(!(inertia>0))continue;
     // SI coordinates: radians for hinges, metres for sliders.
-    const unit=record.angular?Math.PI/180:scale,current=value(record)*unit,target=targetOf(record)*unit,targetVelocity=drive.targetVelocity*unit;
+    const unit=record.angular?Math.PI/180:scale,current=value(record)*unit,target=targetOf(record)*unit;
+    // Posing holds what it sets: a velocity drive (a motor) runs only in physics, so here it only damps.
+    const targetVelocity=0;
     const gain=drive.acceleration?inertia:kilograms*(record.angular?180/Math.PI*scale**2:1);
     const child=body(record.child).data,bodyDamping=record.angular?child.angularDamping??.05:child.linearDamping??0;
     const stiffness=drive.stiffness*gain,damping=drive.damping*gain,limit=driveForceLimit(drive,record.angular,inertia,scale,kilograms);
@@ -316,7 +318,9 @@ export async function createMechanism({snapshot,bindVisuals,loadKinematics,dragM
    getJointValue(path){const record=joints.get(path);return record?.dof!==null&&record?value(record):null;},
    /** @param {string} path @param {number} next */
    setJointValue(path,next){const record=joints.get(path);if(record&&driven.has(record))driven.set(record,0);
-    const ok=!!record&&setValue(record,next);if(ok&&record)keepPose([record]);return ok;},
+    // every driven joint the move carried along (couplings, closed loops) keeps its new value too
+    const before=new Map([...driven.keys()].map(item=>[item,value(item)]));
+    const ok=!!record&&setValue(record,next);if(ok&&record){keepPose([record]);keepPose(driven.keys(),before);}return ok;},
    /** @param {string} path */
    getJointRotation(path){const record=joints.get(path);return record?.rotationDofs.length?rotationValue(record).toArray():null;},
    /** @param {string} path @param {import('./index.js').PhysicsRotation} next */
