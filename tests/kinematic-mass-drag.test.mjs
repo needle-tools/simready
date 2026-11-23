@@ -46,8 +46,7 @@ test('the lighter joint takes more of a drag that either joint could follow',asy
     for(const result of [light,heavy])assert.ok(Math.abs(result.seat+result.lever-.001)<2.5e-4,`the tip follows the pointer within the drag tolerance: ${result.seat+result.lever}`);
 });
 
-test('an authored drive resists the drag like a return spring',async()=>{
+test('while dragging, the pointer wins over a drive; the drive keeps the pose it is left in',async()=>{
     const free=await pull({},.02),sprung=await pull({spring:.05},.02);
-    assert.ok(sprung.lever<free.lever*.8,`the spring holds the lever back: ${sprung.lever} vs ${free.lever}`);
-    assert.ok(sprung.seat>free.seat,'the seat takes up what the lever gives');
+    assert.ok(Math.abs(sprung.lever-free.lever)<1e-6&&Math.abs(sprung.seat-free.seat)<1e-6,'a drive does not change the drag');
 });

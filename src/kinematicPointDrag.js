@@ -14,8 +14,6 @@ function copyFrame(target, source, scale) {
 /** @typedef {{masses:Map<string,import('./massProperties.js').BodyMassProperties>,kilograms:number,
  * jointAxis:(record:JointRecord)=>{pivot:Vector3,axis:Vector3}}} DragDynamics */
 
-/** The Rapier drag pulls with 400 times the grabbed body's mass; the kinematic pointer matches it. */
-const POINTER_STIFFNESS_PER_KILOGRAM = 400;
 
 /** Moment of everything a joint carries about its degree of freedom, in SI units: kg·m² about a
  * hinge axis, kg along a slider.
@@ -41,10 +39,20 @@ export function effectiveInertia(edge, bodies, parents, scale, dynamics) {
     return total;
 }
 
+/** A drive's force limit in SI units (N·m for hinges, N for sliders), or Infinity when it has none.
+ * An acceleration drive's limit is an acceleration, so it scales with the inertia it moves.
+ * @param {import('./index.js').PhysicsDrive} drive @param {boolean} angular @param {number} inertia
+ * @param {number} scale @param {number} kilograms */
+export function driveForceLimit(drive, angular, inertia, scale, kilograms) {
+    const limit = drive.forceLimit;
+    if (typeof limit !== 'number' || !Number.isFinite(limit) || limit < 0) return Infinity;
+    return drive.acceleration ? limit * (angular ? Math.PI / 180 : scale) * inertia : limit * kilograms * scale ** (angular ? 2 : 1);
+}
+
 /** Build a position-only goal at the actual contact on an open serial chain.
  * Closed and coupled components keep the mechanism's constrained joint gesture.
  * With `dynamics` and a solver that supports degree of freedom weights, lighter joints
- * move first and authored drives pull back toward their targets like springs.
+ * move first. The pointer always wins: drives act on the pose after release (see kinematics.js).
  * @param {import('./kinematics-types.js').KinematicsModule} core
  * @param {Map<string,import('./kinematics.js').BodyRecord>} bodies
  * @param {Map<string,JointRecord>} joints @param {Map<string,JointRecord>} parents
@@ -117,23 +125,12 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
         goal.setGoalDoF(DOF.X, DOF.Y, DOF.Z);
         goal.setPosition(point.x * scale, point.y * scale, point.z * scale);
         goal.makeClosure(tip);
-        if (dynamics && drives.length && drives.every(({joint}) => joint.dofWeights instanceof Float32Array && joint.dofStiffness instanceof Float32Array)) {
+        if (dynamics && drives.length && drives.every(({joint}) => joint.dofWeights instanceof Float32Array)) {
             const inertia = drives.map(({edge}) => effectiveInertia(edge, bodies, parents, scale, dynamics));
             const mean = inertia.reduce((sum, value) => sum + value, 0) / inertia.length;
-            const grabbedMass = (dynamics.masses.get(path)?.mass ?? 1) * dynamics.kilograms;
-            const pointer = POINTER_STIFFNESS_PER_KILOGRAM * grabbedMass;
-            for (const [i, {edge, joint, dof}] of drives.entries()) {
-                const {dofWeights, dofStiffness} = joint;
-                if (!dofWeights || !dofStiffness) continue;
-                if (mean > 0 && inertia[i] > 0) dofWeights[dof] = inertia[i] / mean;
-                const drive = edge.data.drive;
-                if (!drive?.enabled || !(drive.stiffness > 0)) continue;
-                // Force drives author torque per degree or force per unit length. An acceleration
-                // drive's stiffness is a rate, so it pulls with the inertia it moves.
-                const stiffness = drive.acceleration ? drive.stiffness * inertia[i]
-                    : drive.stiffness * dynamics.kilograms * (edge.angular ? 180 / Math.PI * scale ** 2 : 1);
-                dofStiffness[dof] = stiffness / pointer;
-                joint.setRestPoseValue(dof, edge.sign * drive.targetPosition * (edge.angular ? Math.PI / 180 : scale));
+            for (const [i, {joint, dof}] of drives.entries()) {
+                const {dofWeights} = joint;
+                if (dofWeights && mean > 0 && inertia[i] > 0) dofWeights[dof] = inertia[i] / mean;
             }
         }
         const solver = new Solver(root);
@@ -150,7 +147,7 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
         solver.translationConvergeThreshold = 0.00025;
 
         /** @param {import('three').Vector3Like} position */
-        return function move(position) {
+        const move = function move(position) {
             if (!Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) return;
             goal.setPosition(position.x * scale, position.y * scale, position.z * scale);
             solver.solve();
@@ -164,5 +161,6 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
             }
             if (changed) sync();
         };
+        return Object.assign(move, {edges: drives.map(({edge}) => edge)});
     };
 }

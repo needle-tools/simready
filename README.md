@@ -241,7 +241,7 @@ bindings. It preserves each visual's initial offset from its owning body.
 
 ## Dragging articulated parts
 
-Enable point dragging to pose an open chain by grabbing its surface. Picking a lamp shade can move both the shoulder and the elbow. Lighter joints move first, weighted by the mass each one carries from `computeMassProperties`, and joints with authored drives pull back toward their targets like springs. Hinges, drawers, mimic joints and closed linkages retain their joint constraints. The default `dragMode` is `'joint'` for applications that drive one coordinate at a time.
+Enable point dragging to pose an open chain by grabbing its surface. Picking a lamp shade can move both the shoulder and the elbow. Lighter joints move first, weighted by the mass each one carries from `computeMassProperties`. The pointer always wins while dragging; a driven joint you move keeps its new value as its drive target (see [kinematic posing](docs/kinematic-posing.md)). Hinges, drawers, mimic joints and closed linkages retain their joint constraints. The default `dragMode` is `'joint'` for applications that drive one coordinate at a time.
 
 ```js
 import {bindPointerDrag} from '@needle-tools/simready/three';
@@ -282,13 +282,18 @@ pointer interaction. `endDrag()` finishes a gesture without destroying the
 mechanism. `play()` enables dragging; `pause()` stops dragging while keeping the
 controller available.
 
-Joints with authored drives return toward their targets when nothing holds them.
+Joints with authored drives move toward their drive targets when nothing holds them.
 Call `mechanism.update(dt)` once per frame with the elapsed seconds; it returns
 whether a joint moved. Each drive acts as a spring and damper on its own joint,
-moving the inertia that joint carries, with the body's authored damping or 0.05
-per second for hinges. This is not a physics simulation: there is no gravity, no
-contact and no dynamic coupling between joints. A drag, a slider change or a
-limit stops the joint's motion.
+moving the inertia that joint carries, within its force limit and with the body's
+authored damping or 0.05 per second for hinges. This is not a physics simulation:
+there is no gravity, no contact and no dynamic coupling between joints.
+
+Posing is deliberate. When a drag or `setJointValue()` moves a driven joint, that value
+becomes its drive target, so the pose holds instead of springing back. Joints you did not
+move keep their authored targets, and `reset()` restores all of them. The snapshot is not
+changed. [Kinematic posing](docs/kinematic-posing.md) explains the choice and how it
+relates to physics dragging.
 
 Dispose a controller when unloading or replacing its asset, or when changing
 that asset from joint posing to dynamics. Both controllers move the same parts,
