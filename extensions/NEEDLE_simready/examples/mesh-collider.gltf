@@ -598,12 +598,6 @@
               0,
               -0.02
             ],
-            "rotation": [
-              0,
-              0,
-              0,
-              1
-            ],
             "halfExtents": [
               0.6,
               0.4,
@@ -618,12 +612,6 @@
               0.5,
               0,
               0.45
-            ],
-            "rotation": [
-              0,
-              0,
-              0,
-              1
             ],
             "approximation": "none",
             "meshScale": [
@@ -640,28 +628,6 @@
             "type": "revolute",
             "body0": "/Cabinet/Base",
             "body1": "/Cabinet/Door",
-            "position0": [
-              0,
-              0,
-              0
-            ],
-            "position1": [
-              0,
-              0,
-              0
-            ],
-            "rotation0": [
-              0,
-              0,
-              0,
-              1
-            ],
-            "rotation1": [
-              0,
-              0,
-              0,
-              1
-            ],
             "axis": "Z",
             "limit": {
               "enabled": true,

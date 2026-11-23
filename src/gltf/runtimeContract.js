@@ -14,6 +14,39 @@ const fields={
  unsupported:['path','type','reason'],
 };
 const nested={limit:['enabled','lower','upper'],drive:['enabled','targetPosition','targetVelocity','stiffness','damping','acceleration','forceLimit'],mimic:['joint','multiplier','offset']};
+
+const origin = [0, 0, 0];
+const identity = [0, 0, 0, 1];
+const unitScale = [1, 1, 1];
+// Optional wire defaults from runtime-snapshot.schema.json. Keep authored
+// gravityScale, which overrides the setting of an existing Engine body.
+const defaults = {
+ bodies: {scale: unitScale, rigidBodyEnabled: true, kinematicBody: false, startsAsleep: false},
+ shapes: {position: origin, rotation: identity, collisionEnabled: true, axis: 'X', meshScale: unitScale},
+ joints: {position0: origin, position1: origin, rotation0: identity, rotation1: identity, jointEnabled: true,
+  collisionEnabled: false, excludeFromArticulation: false, axis: 'X'},
+ groups: {invertFilteredGroups: false},
+};
+
+/** Compact a validated snapshot projected for export. @param {import('../index.js').WireSnapshot} snapshot */
+export function omitRuntimeDefaults(snapshot) {
+ for (const key of /** @type {(keyof typeof defaults)[]} */ (Object.keys(defaults))) {
+  for (const item of snapshot[key]) {
+   const record = /** @type {Record<string, unknown>} */ (item);
+   for (const [field, fallback] of Object.entries(defaults[key])) {
+    const value = record[field];
+    const matches = Array.isArray(fallback)
+     ? Array.isArray(value) && value.length === fallback.length && fallback.every((entry, i) => entry === value[i])
+     : value === fallback;
+    if (matches) delete record[field];
+   }
+  }
+ }
+ for (const joint of snapshot.joints) {
+  if (joint.drive?.acceleration === false) delete joint.drive.acceleration;
+ }
+}
+
 /** @param {Record<string,any>} value @param {string[]} keys */
 const select=(value,keys)=>Object.fromEntries(keys.filter(key=>value[key]!==undefined).map(key=>[key,value[key]]));
 /** @param {import('../index.js').WireSnapshot} source @returns {import('../index.js').WireSnapshot} */

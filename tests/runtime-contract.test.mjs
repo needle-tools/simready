@@ -16,6 +16,59 @@ test('runtime export has a closed vocabulary and drops source property bags',asy
  assert.deepEqual(runtime.semantics,data.semantics);assert.deepEqual(loaded.scene.children[0].children[0].userData.simreadyLabels,[{taxonomy:'class',labels:['cabinet']}]);
  const mechanism=await runtime.createMechanism();try{assert.equal(mechanism.bodies.size,1);}finally{mechanism.dispose();}
 });
+
+test('runtime export omits optional defaults and keeps authored physics overrides', async () => {
+ const snapshot = {
+  bodies: [
+   {path: '/Body', position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1],
+    rigidBodyEnabled: true, kinematicBody: false, startsAsleep: false, gravityScale: 1, continuousCollision: false},
+  ],
+  shapes: [{path: '/Collider', body: '/Body', type: 'cylinder', radius: 1, halfHeight: 1,
+   position: [0, 0, 0], rotation: [0, 0, 0, 1], collisionEnabled: true, axis: 'X'}],
+  joints: [{path: '/Hinge', type: 'revolute', body1: '/Body', position0: [0, 0, 0], position1: [0, 0, 0],
+   rotation0: [0, 0, 0, 1], rotation1: [0, 0, 0, 1], jointEnabled: true,
+   collisionEnabled: false, excludeFromArticulation: false, axis: 'X',
+   drive: {enabled: true, targetPosition: 0, targetVelocity: 0, stiffness: 1, damping: 1, acceleration: false}}],
+  groups: [{path: '/Group', invertFilteredGroups: false}], materials: [], scenes: [],
+ };
+ const authored = structuredClone(snapshot);
+ const sparse = createSimreadyRuntimeExtension({...options(), snapshot});
+ assert.deepEqual(sparse.snapshot, {
+  bodies: [{path: '/Body', position: [0, 0, 0], rotation: [0, 0, 0, 1], gravityScale: 1, continuousCollision: false}],
+  shapes: [{path: '/Collider', body: '/Body', type: 'cylinder', radius: 1, halfHeight: 1}],
+  joints: [{path: '/Hinge', type: 'revolute', body1: '/Body',
+   drive: {enabled: true, targetPosition: 0, targetVelocity: 0, stiffness: 1, damping: 1}}],
+  groups: [{path: '/Group'}], materials: [], scenes: [],
+ });
+ assert.deepEqual(snapshot, authored);
+
+ const poses = [];
+ for (const payload of [sparse, {...sparse, snapshot: authored}]) {
+  const runtime = getSimreadyRuntime(await load(payload));
+  const mechanism = await runtime.createMechanism();
+  try {
+   assert.equal(mechanism.setJointValue('/Hinge', 45), true);
+   assert.ok(Math.abs(mechanism.getJointValue('/Hinge') - 45) < 1e-5);
+   poses.push({...mechanism.bodies.get('/Body').body.rotation()});
+  } finally {
+   mechanism.dispose();
+  }
+ }
+ assert.deepEqual(poses[0], poses[1]);
+
+ snapshot.bodies[0].scale = [1, 1, 1.000001];
+ snapshot.shapes[0].collisionEnabled = false;
+ snapshot.joints[0].axis = 'Y';
+ snapshot.joints[0].drive.acceleration = true;
+ snapshot.groups[0].invertFilteredGroups = true;
+ const overrides = createSimreadyRuntimeExtension({...options(), snapshot}).snapshot;
+ assert.deepEqual(overrides.bodies[0].scale, snapshot.bodies[0].scale);
+ assert.equal(overrides.shapes[0].collisionEnabled, false);
+ assert.equal(overrides.joints[0].axis, 'Y');
+ assert.equal(overrides.joints[0].drive.acceleration, true);
+ assert.equal(overrides.groups[0].invertFilteredGroups, true);
+});
+
 test('runtime import validates the closed descriptor fields',async()=>{
  for(const edit of [p=>p.version=3,p=>p.unknownField={},p=>p.snapshot.unknownField=[],p=>p.snapshot.bodies[0].physxProperties={},p=>p.bindings[0].instance={source:'USD'},p=>p.semantics[0].attributes=[],p=>p.semantics[0].path='/Missing']){
   const data=createSimreadyRuntimeExtension(options());edit(data);await assert.rejects(load(data),/Invalid/);

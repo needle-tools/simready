@@ -59,7 +59,7 @@
 import {isSnapshot} from './validation.js';
 
 import {copyJson} from './json.js';
-import {runtimeSnapshot,isRuntimeExtension} from './gltf/runtimeContract.js';
+import {runtimeSnapshot,isRuntimeExtension,omitRuntimeDefaults} from './gltf/runtimeContract.js';
 
 export const SIMREADY_EXTENSION = 'NEEDLE_simready';
 
@@ -123,6 +123,7 @@ export function getSnapshotIssues(snapshot){
 export function createSimreadyRuntimeExtension({snapshot,stageNode,bindings,semantics=[],mappingIssues=[]}){
  const payload={version:/** @type {const} */(1),stageNode,snapshot:runtimeSnapshot(snapshot),bindings:bindings.map(({node,path,body})=>({node,path,...(body?{body}:{})})),semantics,mappingIssues};
  validateSimreadyExtension(payload);
+ omitRuntimeDefaults(payload.snapshot);
  return /** @type {SimreadyRuntimeExtension} */(copyJson(payload));
 }
 /** Validate the runtime interchange descriptor.
