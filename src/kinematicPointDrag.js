@@ -95,7 +95,7 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
         }
         let parent = root;
         /** @type {{edge:JointRecord, live:JointRecord['joint'], joint:JointRecord['joint'],
-         * dof:number, factor:number, min:number, max:number}[]} */
+         * dof:number, factor:number, axis:Vector3, min:number, max:number}[]} */
         const drives = [];
         for (const edge of chain) {
             const joint = new Joint(), link = new Link(), body = bodies.get(edge.child);
@@ -109,8 +109,10 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
                 joint.setMinLimit(dof, edge.joint.minDoFLimit[dof] * factor);
                 joint.setMaxLimit(dof, edge.joint.maxDoFLimit[dof] * factor);
                 joint.setDoFValue(dof, edge.joint.getDoFValue(dof) * factor);
+                const axisIndex = dof === DOF.Y || dof === DOF.EY ? 1 : dof === DOF.Z || dof === DOF.EZ ? 2 : 0;
                 drives.push({
                     edge, live:edge.joint, joint, dof, factor,
+                    axis:new Vector3().setComponent(axisIndex, 1),
                     min:joint.minDoFLimit[dof], max:joint.maxDoFLimit[dof],
                 });
             }
@@ -146,24 +148,77 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
         solver.translationErrorClamp = Infinity;
         const reach = Math.max(0, ...chain.filter(edge => edge.angular && edge.dof !== null && edge.lower < edge.upper)
             .map(edge => new Vector3().setFromMatrixPosition(new Matrix4().fromArray(edge.joint.matrixWorld)).distanceTo(point)));
+        const maxAngularStep = 0.1;
         const maxPull = reach > 0 ? .1 * reach * scale : Infinity;
         solver.maxIterations = 8;
         solver.translationConvergeThreshold = Math.min(0.00025, maxPull / 10);
-        const contact = new Vector3(), target = new Vector3(), tipMatrix = new Matrix4();
+        const contact = new Vector3(), target = new Vector3(), pointer = new Vector3(), matrix = new Matrix4();
         const previous = new Float64Array(drives.length);
+        const direction = new Vector3(), pivot = new Vector3(), contactRadius = new Vector3(), targetRadius = new Vector3();
+        const arm = new Vector3(), candidate = new Vector3(), cross = new Vector3();
+
+        function getContact() {
+            tip.updateMatrixWorld();
+            return contact.setFromMatrixPosition(matrix.fromArray(tip.matrixWorld));
+        }
+
+        // A simultaneous least-squares step can become uphill once its outward
+        // components are clipped at joint limits. At that point test feasible
+        // motion along each joint's arc or slide and take the best improvement.
+        function stepAlongJoint() {
+            const start = getContact();
+            const initialError = start.distanceToSquared(pointer);
+            let error = initialError;
+            let best = null, value = 0;
+            for (const drive of drives) {
+                const {edge, joint, dof, axis, min, max} = drive;
+                if (min >= max) continue;
+                joint.updateMatrixWorld();
+                matrix.fromArray(joint.matrixWorld);
+                direction.copy(axis).transformDirection(matrix);
+                pivot.setFromMatrixPosition(matrix);
+                const current = joint.getDoFValue(dof), step = edge.angular ? maxAngularStep : maxPull;
+                const lower = Math.max(min - current, -step), upper = Math.min(max - current, step);
+                let delta;
+                if (edge.angular) {
+                    arm.copy(start).sub(pivot);
+                    contactRadius.copy(arm).projectOnPlane(direction);
+                    targetRadius.copy(pointer).sub(pivot).projectOnPlane(direction);
+                    const angle = Math.atan2(direction.dot(cross.crossVectors(contactRadius, targetRadius)), contactRadius.dot(targetRadius));
+                    delta = Math.max(lower, Math.min(upper, angle));
+                    candidate.copy(arm).applyAxisAngle(direction, delta).add(pivot);
+                } else {
+                    const travel = targetRadius.copy(pointer).sub(start).dot(direction);
+                    delta = Math.max(lower, Math.min(upper, travel));
+                    candidate.copy(start).addScaledVector(direction, delta);
+                }
+                const nextError = candidate.distanceToSquared(pointer);
+                if (nextError < error) {
+                    error = nextError;
+                    best = drive;
+                    value = current + delta;
+                }
+            }
+            if (best) {
+                const current = best.joint.getDoFValue(best.dof);
+                best.joint.setDoFValue(best.dof, value);
+                if (!(getContact().distanceToSquared(pointer) < initialError)) best.joint.setDoFValue(best.dof, current);
+            }
+        }
 
         /** @param {import('three').Vector3Like} position */
         const move = function move(position) {
             if (!Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) return;
-            tip.updateMatrixWorld();
-            contact.setFromMatrixPosition(tipMatrix.fromArray(tip.matrixWorld));
-            target.copy(position).multiplyScalar(scale).sub(contact).clampLength(0, maxPull).add(contact);
+            const start = getContact();
+            pointer.copy(position).multiplyScalar(scale);
+            const previousError = start.distanceToSquared(pointer);
+            target.copy(pointer).sub(start).clampLength(0, maxPull).add(start);
             goal.setPosition(target.x, target.y, target.z);
             // A small tip displacement can still admit a large joint rotation near a
             // singularity. Keep every solve in a joint-space box around the last pose.
             for (const [index, {edge, joint, dof, min, max}] of drives.entries()) {
                 const value = previous[index] = joint.getDoFValue(dof);
-                const step = edge.angular ? 0.1 : maxPull;
+                const step = edge.angular ? maxAngularStep : maxPull;
                 joint.setMinLimit(dof, Math.max(min, value - step));
                 joint.setMaxLimit(dof, Math.min(max, value + step));
             }
@@ -175,9 +230,10 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
                     joint.setMaxLimit(dof, max);
                 }
             }
-            if (drives.some(({joint, dof}) => !Number.isFinite(joint.getDoFValue(dof)))) {
+            if (drives.some(({joint, dof}) => !Number.isFinite(joint.getDoFValue(dof))) ||
+                !(getContact().distanceToSquared(pointer) < previousError)) {
                 for (const [index, {joint, dof}] of drives.entries()) joint.setDoFValue(dof, previous[index]);
-                return;
+                if (previousError > maxPull ** 2) stepAlongJoint();
             }
             let changed = false;
             for (const {joint, live, dof, factor} of drives) {

@@ -6,6 +6,9 @@
 /**
  * Bind a mechanism or simulation to a canvas. A movable surface captures the
  * pointer; stationary foreground surfaces and misses leave camera navigation alone.
+ * Press and release still reach the host, so its click and double-click handling
+ * (such as focusing the camera) keeps working on movable parts. Pointer moves of an
+ * active drag are consumed, so navigation that started on the press does not move.
  * The drag plane passes through the hit point and faces the camera at grab time.
  * The binding never styles the element: hosts set cursors from `onHoverChange`
  * (the draggable part under an idle pointer, or null) and `onDraggingChange`.

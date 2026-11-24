@@ -58,7 +58,7 @@ for(const [scale,reversed] of [[1,false],[.001,true]]) {
     });
 }
 
-test('a light wrist settles smoothly when the pointer pulls a robot arm beyond reach', async () => {
+function robotArm() {
     const lengths = [.4, .4, .1], masses = [2, 1, .05];
     const bodies = [body('/Base'), body('/Elbow', [.4, 0, 0]), body('/Wrist', [.8, 0, 0])];
     const joints = bodies.map(({path}, i) => ({
@@ -70,7 +70,11 @@ test('a light wrist settles smoothly when the pointer pulls a robot arm beyond r
         path:path + 'Shape', body:path, type:'cube', rotation:identity,
         position:[lengths[i] / 2, 0, 0], halfExtents:[lengths[i] / 2, .025, .025], mass:masses[i],
     }));
-    const snapshot = {...table(), bodies, joints, shapes};
+    return {...table(), bodies, joints, shapes};
+}
+
+test('a light wrist settles smoothly when the pointer pulls a robot arm beyond reach', async () => {
+    const snapshot = robotArm(), {joints} = snapshot;
     const m = await createMechanism({snapshot, dragMode:'point'});
     try {
         m.play();
@@ -95,6 +99,37 @@ test('a light wrist settles smoothly when the pointer pulls a robot arm beyond r
         previous.forEach((angle, index) => close(angle, settled[index], .5));
         sweep(m, outside, start);
         assert.ok(contact().distanceTo(start) < .002, 'the arm follows when the pointer returns within reach');
+    } finally {
+        m.dispose();
+    }
+});
+
+test('the wrist keeps following a moving pointer outside the arm’s reach', async () => {
+    const m = await createMechanism({snapshot:robotArm(), dragMode:'point'});
+    try {
+        m.play();
+        const wrist = m.bodies.get('/Wrist');
+        const contact = () => new Vector3(.1, .02, 0).applyMatrix4(new Matrix4().fromArray(wrist.link.matrixWorld));
+        const start = contact(), axis = new Vector3(1, 0, 0);
+        const center = new Vector3(.8, 0, -.2);
+        const offset = new Vector3(1.3, .8, .6).applyAxisAngle(axis, Math.PI / 2);
+        const outside = offset.clone().add(center);
+        assert.ok(m.beginDrag('/Wrist', start));
+        for (let i = 1; i <= 60; i++) m.moveDrag(start.clone().lerp(outside, i / 60));
+        for (let i = 0; i < 60; i++) m.moveDrag(outside);
+        let previous = contact(), frozen = 0, distanceTraveled = 0;
+        for (let i = 1; i <= 125; i++) {
+            const pointer = offset.clone().applyAxisAngle(axis, 1.95 * i / 125).add(center);
+            const distance = previous.distanceTo(pointer);
+            m.moveDrag(pointer);
+            const next = contact(), movement = next.distanceTo(previous);
+            distanceTraveled += movement;
+            frozen = movement < .00005 ? frozen + 1 : 0;
+            assert.ok(frozen < 5, 'the wrist follows as the pointer sweeps along the reach boundary');
+            assert.ok(movement < .02 && next.distanceTo(pointer) <= distance + 1e-5, 'the wrist moves smoothly toward the pointer');
+            previous = next;
+        }
+        assert.ok(distanceTraveled > .25, 'the moving pointer changes the pose');
     } finally {
         m.dispose();
     }
