@@ -51,6 +51,7 @@ export type Solver = {
     rotationConvergeThreshold: number;
     useSVD: boolean;
     dampingFactor: number;
+    divergeThreshold: number;
     translationErrorClamp: number;
     solve(): void;
 };

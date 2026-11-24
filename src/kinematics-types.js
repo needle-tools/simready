@@ -14,7 +14,7 @@
  * setRestPoseValue(dof:number,value:number):boolean,dofWeights?:Float32Array,dofStiffness?:Float32Array,
  * getClosureError(position:Float64Array,rotation:Float64Array):void}} Joint
  * @typedef {{maxIterations:number,translationConvergeThreshold:number,
- * rotationConvergeThreshold:number,useSVD:boolean,dampingFactor:number,translationErrorClamp:number,solve():void}} Solver
+ * rotationConvergeThreshold:number,useSVD:boolean,dampingFactor:number,divergeThreshold:number,translationErrorClamp:number,solve():void}} Solver
  * @typedef {{Link:new()=>Link,Joint:new()=>Joint,Solver:new(root:Link)=>Solver,
  * Goal?:new()=>Joint & {setGoalDoF(...axes:number[]):void},
  * DOF:{X:number,Y:number,Z:number,EX:number,EY:number,EZ:number}}} KinematicsModule

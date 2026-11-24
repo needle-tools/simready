@@ -94,7 +94,8 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
             root.setQuaternion(q.x, q.y, q.z, q.w);
         }
         let parent = root;
-        /** @type {{edge:JointRecord, live:JointRecord['joint'], joint:JointRecord['joint'], dof:number, factor:number}[]} */
+        /** @type {{edge:JointRecord, live:JointRecord['joint'], joint:JointRecord['joint'],
+         * dof:number, factor:number, min:number, max:number}[]} */
         const drives = [];
         for (const edge of chain) {
             const joint = new Joint(), link = new Link(), body = bodies.get(edge.child);
@@ -108,7 +109,10 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
                 joint.setMinLimit(dof, edge.joint.minDoFLimit[dof] * factor);
                 joint.setMaxLimit(dof, edge.joint.maxDoFLimit[dof] * factor);
                 joint.setDoFValue(dof, edge.joint.getDoFValue(dof) * factor);
-                drives.push({edge, live:edge.joint, joint, dof, factor});
+                drives.push({
+                    edge, live:edge.joint, joint, dof, factor,
+                    min:joint.minDoFLimit[dof], max:joint.maxDoFLimit[dof],
+                });
             }
             parent.addChild(joint);
             joint.addChild(link);
@@ -134,24 +138,47 @@ export function pointDragFactory(core, bodies, joints, parents, scale, sync, dyn
             }
         }
         const solver = new Solver(root);
-        // Out-of-reach goals have many nearly equal poses, such as a caster's swivel and
-        // spin. The default damping lets each pointer sample jump between them.
         solver.dampingFactor = 0.05;
-        // Bound each iteration's pull to the size of the hinges' reach: a pointer far beyond a
-        // small part otherwise asks for large steps that land on alternate poses. Sliders have
-        // no alternate poses and keep the solver's default.
-        const reach = Math.max(0, ...chain.filter(edge => edge.angular && edge.dof !== null)
+        solver.divergeThreshold = 0;
+        // A clamped residual is flat while the target is further away than the clamp.
+        // Place the goal along the ray from the gripped point to the pointer instead, so the
+        // line search measures real progress and the solve stays near the current pose.
+        solver.translationErrorClamp = Infinity;
+        const reach = Math.max(0, ...chain.filter(edge => edge.angular && edge.dof !== null && edge.lower < edge.upper)
             .map(edge => new Vector3().setFromMatrixPosition(new Matrix4().fromArray(edge.joint.matrixWorld)).distanceTo(point)));
-        if (reach > 0) solver.translationErrorClamp = .1 * reach * scale;
+        const maxPull = reach > 0 ? .1 * reach * scale : Infinity;
         solver.maxIterations = 8;
-        solver.translationConvergeThreshold = 0.00025;
+        solver.translationConvergeThreshold = Math.min(0.00025, maxPull / 10);
+        const contact = new Vector3(), target = new Vector3(), tipMatrix = new Matrix4();
+        const previous = new Float64Array(drives.length);
 
         /** @param {import('three').Vector3Like} position */
         const move = function move(position) {
             if (!Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) return;
-            goal.setPosition(position.x * scale, position.y * scale, position.z * scale);
-            solver.solve();
-            if (drives.some(d => !Number.isFinite(d.joint.getDoFValue(d.dof)))) return;
+            tip.updateMatrixWorld();
+            contact.setFromMatrixPosition(tipMatrix.fromArray(tip.matrixWorld));
+            target.copy(position).multiplyScalar(scale).sub(contact).clampLength(0, maxPull).add(contact);
+            goal.setPosition(target.x, target.y, target.z);
+            // A small tip displacement can still admit a large joint rotation near a
+            // singularity. Keep every solve in a joint-space box around the last pose.
+            for (const [index, {edge, joint, dof, min, max}] of drives.entries()) {
+                const value = previous[index] = joint.getDoFValue(dof);
+                const step = edge.angular ? 0.1 : maxPull;
+                joint.setMinLimit(dof, Math.max(min, value - step));
+                joint.setMaxLimit(dof, Math.min(max, value + step));
+            }
+            try {
+                solver.solve();
+            } finally {
+                for (const {joint, dof, min, max} of drives) {
+                    joint.setMinLimit(dof, min);
+                    joint.setMaxLimit(dof, max);
+                }
+            }
+            if (drives.some(({joint, dof}) => !Number.isFinite(joint.getDoFValue(dof)))) {
+                for (const [index, {joint, dof}] of drives.entries()) joint.setDoFValue(dof, previous[index]);
+                return;
+            }
             let changed = false;
             for (const {joint, live, dof, factor} of drives) {
                 const value = joint.getDoFValue(dof) / factor;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {Vector3} from 'three';
+import {Matrix4,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createSimreadyExtension} from '../src/index.js';
 import {registerSimreadyLoader,toGltfPhysicsSnapshot} from '../src/gltf.js';
@@ -57,6 +57,48 @@ for(const [scale,reversed] of [[1,false],[.001,true]]) {
         }finally{m.dispose();}
     });
 }
+
+test('a light wrist settles smoothly when the pointer pulls a robot arm beyond reach', async () => {
+    const lengths = [.4, .4, .1], masses = [2, 1, .05];
+    const bodies = [body('/Base'), body('/Elbow', [.4, 0, 0]), body('/Wrist', [.8, 0, 0])];
+    const joints = bodies.map(({path}, i) => ({
+        ...joint(path + 'Hinge', 'revolute', bodies[i - 1]?.path ?? '', path,
+            i ? [lengths[i - 1], 0, 0] : zero, zero, 'Z'),
+        limit: {enabled:true, lower:-90, upper:90},
+    }));
+    const shapes = bodies.map(({path}, i) => ({
+        path:path + 'Shape', body:path, type:'cube', rotation:identity,
+        position:[lengths[i] / 2, 0, 0], halfExtents:[lengths[i] / 2, .025, .025], mass:masses[i],
+    }));
+    const snapshot = {...table(), bodies, joints, shapes};
+    const m = await createMechanism({snapshot, dragMode:'point'});
+    try {
+        m.play();
+        assert.ok(m.setJointValue('/ElbowHinge', 3));
+        const wrist = m.bodies.get('/Wrist');
+        const contact = () => new Vector3(.1, .02, 0).applyMatrix4(new Matrix4().fromArray(wrist.link.matrixWorld));
+        const start = contact(), outside = start.clone().add(new Vector3(0, 1.2, 0));
+        assert.ok(m.beginDrag('/Wrist', start));
+        const angles = () => joints.map(({path}) => m.getJointValue(path));
+        let previous = angles(), settled;
+        for (let i = 1; i <= 100; i++) {
+            const pointer = start.clone().lerp(outside, Math.min(i / 60, 1));
+            const distance = contact().distanceTo(pointer);
+            m.moveDrag(pointer);
+            assert.ok(contact().distanceTo(pointer) <= distance + 1e-5, 'the grabbed point moves toward the pointer');
+            const next = angles();
+            next.forEach((angle, index) => assert.ok(Math.abs(angle - previous[index]) < 8, 'joint visibly snapped'));
+            if (i === 80) settled = next;
+            previous = next;
+        }
+        assert.ok(contact().distanceTo(outside) < .8, 'the arm keeps reaching toward a distant pointer');
+        previous.forEach((angle, index) => close(angle, settled[index], .5));
+        sweep(m, outside, start);
+        assert.ok(contact().distanceTo(start) < .002, 'the arm follows when the pointer returns within reach');
+    } finally {
+        m.dispose();
+    }
+});
 
 test('default drag still poses the nearest joint on a serial mechanism',async()=>{
     const m=await createMechanism({snapshot:table()});
