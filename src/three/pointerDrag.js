@@ -10,6 +10,9 @@ import {Plane, Raycaster, Vector2, Vector3} from 'three';
 /**
  * Bind a mechanism or simulation to a canvas. A movable surface captures the
  * pointer; stationary foreground surfaces and misses leave camera navigation alone.
+ * Press and release still reach the host, so its click and double-click handling
+ * (such as focusing the camera) keeps working on movable parts. Pointer moves of an
+ * active drag are consumed, so navigation that started on the press does not move.
  * The drag plane passes through the hit point and faces the camera at grab time.
  * The binding never styles the element: hosts set cursors from `onHoverChange`
  * (the draggable part under an idle pointer, or null) and `onDraggingChange`.
@@ -167,7 +170,9 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
         doc.addEventListener('pointerup', up, capture);
         doc.addEventListener('pointercancel', up, capture);
         win?.addEventListener('blur', cancel);
-        consume(event);
+        // Suppress default browser gestures only. Hosts recognize clicks from this
+        // press and the matching release; drag moves are consumed instead.
+        event.preventDefault();
         // A synthetic pointer or one released by the browser may be uncapturable.
         // Document listeners still complete the gesture in this window.
         try { element.setPointerCapture(event.pointerId); } catch {}
@@ -188,7 +193,7 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
     /** @param {PointerEvent} event */
     function up(event) {
         if (drag?.pointerId !== event.pointerId) return;
-        consume(event);
+        // Let the release through: hosts end their own pointer state and detect clicks.
         finish();
         // The release point may be over a different part, or none.
         hover(event);

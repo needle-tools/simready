@@ -167,3 +167,50 @@ test('evaluates hover at most once per animation frame, using the latest pointer
     } finally { binding.dispose(); }
     assert.deepEqual(hovered,[]);
 });
+
+// Node's EventTarget has no propagation path. Model the DOM order for a canvas in a
+// document: document capture listeners, then the canvas, then document bubble
+// listeners, ending wherever a listener stops propagation.
+function domScene() {
+    const capture = new EventTarget(), bubble = new EventTarget(), canvas = new EventTarget(), win = new EventTarget();
+    const doc = {defaultView: win,
+        addEventListener: (type, listener, options) => (options?.capture ? capture : bubble).addEventListener(type, listener),
+        removeEventListener: (type, listener, options) => (options?.capture ? capture : bubble).removeEventListener(type, listener)};
+    let captured = null;
+    Object.assign(canvas, {ownerDocument: doc, getBoundingClientRect: () => ({left: 0, top: 0, width: 400, height: 400}),
+        setPointerCapture: id => { captured = id; }, releasePointerCapture: () => { captured = null; }, hasPointerCapture: id => id === captured});
+    const camera = new PerspectiveCamera(45, 1, .1, 100);
+    camera.position.set(0, 0, 8); camera.lookAt(0, 0, 0);
+    const root = new Group(), geometry = new BoxGeometry(), material = new MeshBasicMaterial(), lever = new Mesh(geometry, material);
+    root.add(lever);
+    const controller = {bodyForObject: object => object === lever ? {data: {path: '/Lever'}} : null, beginDrag: () => true, moveDrag() {}, endDrag() {}};
+    const binding = bindPointerDrag({element: canvas, camera, controller, root});
+    /** Dispatch a pointer event at the canvas; returns whether the default was prevented. */
+    function fire(type, clientX) {
+        const event = Object.assign(new Event(type, {cancelable: true}), {pointerId: 1, isPrimary: true, button: 0, buttons: 0, clientX, clientY: 200});
+        for (const target of [capture, canvas, bubble]) { target.dispatchEvent(event); if (event.cancelBubble) break; }
+        return event.defaultPrevented;
+    }
+    return {canvas, doc, binding, fire, dispose() { binding.dispose(); geometry.dispose(); material.dispose(); }};
+}
+
+// Hosts detect clicks and double-clicks (e.g. double-click to focus the camera) from
+// press and release, so a grab must leave both visible. Only the moves of an active
+// drag belong to the part, which keeps camera navigation from also reacting.
+test('leaves press and release visible to the host while keeping drag moves from camera navigation', () => {
+    const {canvas, doc, binding, fire, dispose} = domScene();
+    const host = [];
+    for (const type of ['pointerdown', 'pointermove', 'pointerup']) doc.addEventListener(type, event => host.push(type + (event.defaultPrevented ? ':prevented' : '')));
+    for (let click = 0; click < 2; click++) {
+        assert.equal(fire('pointerdown', 200), true);
+        assert.equal(binding.dragging, true);
+        fire('pointerup', 200);
+        assert.equal(binding.dragging, false);
+    }
+    fire('pointerdown', 200);
+    assert.equal(fire('pointermove', 240), true);
+    fire('pointerup', 240);
+    fire('pointermove', 260); // released: navigation owns the pointer again
+    assert.deepEqual(host, ['pointerdown:prevented', 'pointerup', 'pointerdown:prevented', 'pointerup', 'pointerdown:prevented', 'pointerup', 'pointermove']);
+    dispose();
+});
