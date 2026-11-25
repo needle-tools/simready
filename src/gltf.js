@@ -31,6 +31,7 @@ export {SIMREADY_EXTENSION} from './index.js';
 import {isRecord} from './validation.js';
 import {limitImageRequests} from './gltf/limitImages.js';
 import {normalizeTextureTransforms} from './gltf/textureTransforms.js';
+import {trackSkinnedSurfaces} from './three/skinPicking.js';
 /** @param {unknown} value @returns {value is Object3D} */
 const isObject3D=value=>isRecord(value)&&value.isObject3D===true;
 /** @typedef {import('three').Mesh|import('three').Line|import('three').Points} CollisionPrimitive */
@@ -116,6 +117,7 @@ async function attachRuntime(parser,result,data){
    if(labels.length)object.userData.simreadyLabels=structuredClone(labels.map(({taxonomy,labels})=>({taxonomy,labels})));
   }
   const ownedBindings=bindings.filter(binding=>snapshot.bodies.some(body=>body.path===binding.body));
+  trackSkinnedSurfaces(root,result.scene,ownedBindings.map(binding=>binding.object));
   /** @param {boolean} worldSpace */
   const bind=worldSpace=>
    /** @param {ReadonlyMap<string,{data:import('./index.js').PhysicsBody,body:import('./kinematics.js').BodyPose}>} bodies

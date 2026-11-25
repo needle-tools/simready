@@ -1,4 +1,5 @@
 // @ts-check
+import {invalidateSkinnedBounds} from './three/skinPicking.js';
 
 /** @typedef {import('three').Object3D} Object3D */
 /** @typedef {import('./kinematics.js').BodyPose} BodyPose */
@@ -72,6 +73,7 @@ export function bindVisuals({root, bodies, bindings, worldSpace = false}) {
             else {object.matrix.copy(target); object.matrixAutoUpdate = reset ? autoUpdate : false; object.matrixWorldNeedsUpdate = true;}
         }
         for (const object of changed) {object.instanceMatrix.needsUpdate = true; object.computeBoundingSphere(); if (object.boundingBox) object.computeBoundingBox();}
+        invalidateSkinnedBounds(root);
     }
     return {
         root, bindings: bindings.map(binding => ({...binding})),

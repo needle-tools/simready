@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3} from 'three';
-import {bindPointerDrag} from '../src/three.js';
+import {Bone, BoxGeometry, BufferGeometry, Float32BufferAttribute, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Skeleton, SkinnedMesh, Uint16BufferAttribute, Vector3} from 'three';
+import {bindPointerDrag, bindVisuals} from '../src/three.js';
+import {trackSkinnedSurfaces} from '../src/three/skinPicking.js';
 
 test('accepts the nearest bound instance, projects in root space, and releases gesture ownership', () => {
     const canvas = new EventTarget(), doc = new EventTarget(), win = new EventTarget();
@@ -82,6 +83,61 @@ function hoverScene() {
     const screenX = x => 200 + new Vector3(x,0,0).project(camera).x * 200;
     return {canvas, doc, win, camera, root, controller, binding, hovered, fire, screenX, movable, lever, dispose(){ binding.dispose(); geometry.dispose(); material.dispose(); }};
 }
+
+test('picks rigid skin triangles beside the stage and follows their posed geometry', () => {
+    const {canvas, doc, camera, root, binding, fire, screenX, dispose} = hoverScene();
+    binding.dispose();
+    const scene = new Group(), left = new Bone(), right = new Bone();
+    scene.add(root);
+    root.add(left, right);
+    // The carrier is a scene sibling, like a glTF skin with joints in the stage.
+    const geometry = new BufferGeometry()
+        .setAttribute('position', new Float32BufferAttribute([-2,-1,0,-1,-1,0,-1.5,1,0, 1,-1,0,2,-1,0,1.5,1,0], 3))
+        .setAttribute('skinIndex', new Uint16BufferAttribute([0,0,0,0,0,0,0,0,0,0,0,0, 1,0,0,0,1,0,0,0,1,0,0,0], 4))
+        .setAttribute('skinWeight', new Float32BufferAttribute(Array.from({length:6}, () => [1,0,0,0]).flat(), 4));
+    const material = new MeshBasicMaterial(), skin = new SkinnedMesh(geometry, material);
+    scene.add(skin);
+    scene.updateMatrixWorld(true);
+    skin.bind(new Skeleton([left, right]));
+    const position = new Vector3();
+    const bodies = new Map([
+        ['/Left', {data:{path:'/Left'}, body:{translation:()=>position, rotation:()=>({x:0,y:0,z:0,w:1})}}],
+        ['/Right', {data:{path:'/Right'}, body:{translation:()=>new Vector3(), rotation:()=>({x:0,y:0,z:0,w:1})}}],
+    ]);
+    trackSkinnedSurfaces(root, scene, [left, right]);
+    const visuals = bindVisuals({root, bodies, bindings:[{object:left, body:'/Left'}, {object:right, body:'/Right'}]});
+    const grabbed = [];
+    const drag = bindPointerDrag({element:canvas,camera,root,controller:{
+        bodyForObject:visuals.bodyForObject,
+        beginDrag(path){ grabbed.push(path); return true; }, moveDrag(){}, endDrag(){},
+    }});
+    try {
+        // The helper's unrelated rigid objects must not intercept this scene.
+        root.children.filter(node => node.isMesh).forEach(node => node.visible = false);
+        for (const x of [-1.5, 1.5]) {
+            fire(canvas, 'pointerdown', screenX(x));
+            assert.equal(drag.dragging, true);
+            fire(doc, 'pointerup', screenX(x));
+        }
+        assert.deepEqual(grabbed, ['/Left', '/Right']);
+        assert.ok(skin.boundingSphere);
+        position.x = -4;
+        visuals.sync();
+        assert.equal(skin.boundingSphere, null);
+        camera.position.x = -5.5;
+        camera.lookAt(-5.5, 0, 0);
+        camera.updateMatrixWorld(true);
+        fire(canvas, 'pointerdown', screenX(-5.5));
+        assert.equal(drag.dragging, true);
+        fire(doc, 'pointerup', screenX(-5.5));
+        assert.deepEqual(grabbed, ['/Left', '/Right', '/Left']);
+    } finally {
+        drag.dispose();
+        dispose();
+        geometry.dispose();
+        material.dispose();
+    }
+});
 
 test('reports hover changes only for parts the controller can drag, without styling the element', () => {
     const scene = hoverScene(), {canvas, doc, hovered, fire, screenX} = scene;

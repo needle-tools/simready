@@ -1,5 +1,6 @@
 // @ts-check
 import {Plane, Raycaster, Vector2, Vector3} from 'three';
+import {rigidSkinHitJoint, updatePickRoots} from './skinPicking.js';
 
 /** @typedef {import('three').Object3D} Object3D */
 /** @typedef {import('three').Camera} Camera */
@@ -55,14 +56,14 @@ export function bindPointerDrag({element, camera, controller, root, pick, onDrag
     /** @param {Object3D|null|undefined} scene @param {C} target */
     function pickBody(scene, target) {
         if (!scene || !target.bodyForObject) return null;
-        scene.updateWorldMatrix(true, true);
-        for (const hit of ray.intersectObject(scene, true)) {
+        for (const hit of ray.intersectObjects(updatePickRoots(scene), true)) {
             let visible = true;
             for (let obj = /** @type {Object3D|null} */ (hit.object); obj; obj = obj.parent) {
                 if (!obj.visible) { visible = false; break; }
             }
             if (!visible) continue;
-            const body = target.bodyForObject(hit.object, hit.instanceId);
+            const joint = rigidSkinHitJoint(hit);
+            const body = (joint && target.bodyForObject(joint)) ?? target.bodyForObject(hit.object, hit.instanceId);
             // A visible unbound surface occludes parts behind it.
             return body ? {path:body.data.path, point:hit.point} : null;
         }

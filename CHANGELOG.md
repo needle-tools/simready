@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Drag rigid parts of a skinned glTF through the standard SimReady pointer controls.
 - Roll a hinge seen edge-on with the pointer instead of flipping its angle where the pointer crosses the axis. `bindPointerDrag` passes the drag plane's normal to `beginDrag(path, point, {normal})`; callers without one keep the previous mapping.
 - Move joints with authored drives toward their drive targets in kinematic mode through `mechanism.update(dt)`, within each drive's force limit. A driven joint you pose by dragging or with `setJointValue()` keeps that pose as its drive target until `reset()`.
 - Point dragging moves lighter joints first, by the mass each joint carries. This uses the Needle fork of closed-chain-ik; with upstream closed-chain-ik, point dragging keeps its previous behavior.
